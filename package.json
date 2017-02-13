@@ -1,0 +1,29 @@
+{
+  "name": "game2048elm",
+  "version": "0.1.0",
+  "description": "The 2048 Game rewritten in Elm just for fun.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "$(npm bin)/elm-live --path-to-elm-make=\"elm-make\" src/Main.elm --yes"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zindel/game2048elm.git"
+  },
+  "keywords": [
+    "Game",
+    "2048",
+    "Elm"
+  ],
+  "author": "Oleksiy Golovko",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/zindel/game2048elm/issues"
+  },
+  "homepage": "https://github.com/zindel/game2048elm#readme",
+  "devDependencies": {
+    "elm": "^0.18.0",
+    "elm-live": "^2.7.4"
+  }
+}
