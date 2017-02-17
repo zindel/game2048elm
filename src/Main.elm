@@ -17,6 +17,14 @@ type Msg
     | Tick Time
 
 
+
+-- MODEL
+
+
+type alias Direction =
+    Int
+
+
 type alias Tile =
     { row : Animation
     , col : Animation
@@ -43,6 +51,7 @@ init : ( Model, Cmd Msg )
 init =
     ( { board =
             [ createTile 1 1 2
+            , createTile 1 2 2
             ]
       , time = 0
       }
@@ -50,51 +59,125 @@ init =
     )
 
 
-
--- UPDATE
-
-
-updateBoard : Time -> Int -> Board -> Board
-updateBoard time key board =
+moveTile : Time -> Int -> Int -> Tile -> Tile
+moveTile time row col tile =
     let
-        fn =
-            case key of
+        move start end =
+            if start == end then
+                static start
+            else
+                animation time
+                    |> from start
+                    |> to end
+                    |> duration (0.3 * second)
+    in
+        { tile
+            | row = move (getTo tile.row) (toFloat row)
+            , col = move (getTo tile.col) (toFloat col)
+        }
+
+
+collapse : Int -> (Int -> Int) -> List ( Int, Int ) -> List Int
+collapse startPos nextPos positions =
+    let
+        acc =
+            ( startPos, 0, False )
+
+        newPos ( pos, value ) ( lastPos, lastValue, collapsed ) =
+            if (value == lastValue) && (not collapsed) then
+                ( lastPos, lastValue, True )
+            else
+                ( nextPos lastPos, value, False )
+    in
+        positions
+            |> List.scanl newPos acc
+            |> List.map (\( f, _, _ ) -> f)
+            |> List.drop 1
+
+
+moveBoard : Time -> Direction -> Board -> Board
+moveBoard time direction board =
+    let
+        ( changing, sortDirection ) =
+            case direction of
                 37 ->
-                    \row col ->
-                        ( row
-                        , if col == 1 then
-                            4
-                          else
-                            1
-                        )
+                    ( "col", 1 )
+
+                38 ->
+                    ( "row", 1 )
+
+                39 ->
+                    ( "col", -1 )
+
+                40 ->
+                    ( "row", -1 )
 
                 _ ->
-                    \row col -> (row, col)
+                    ( "", 0 )
 
-        move s e =
-            if s == e then
-                static s
+        ( same, get, set ) =
+            if changing == "col" then
+                ( .row >> getTo >> floor
+                , .col >> getTo >> floor
+                , \t v -> moveTile time (same t) v t
+                )
             else
-                animation time |> from s |> to e |> duration (0.3 * second)
+                ( .col >> getTo >> floor
+                , .row >> getTo >> floor
+                , \t v -> moveTile time v (same t) t
+                )
 
-        updateTile : Tile -> Tile
-        updateTile tile =
-            let
-                startRow =
-                    getTo tile.row
+        ( startPos, nextPos ) =
+            if sortDirection == 1 then
+                ( 0, (+) 1 )
+            else
+                ( boardSize + 1, (+) -1 )
 
-                startCol =
-                    getTo tile.col
+        sortFn tile =
+            (get tile) * sortDirection
 
-                ( endRow, endCol ) =
-                    fn startRow startCol
-            in
-                { tile
-                    | row = move startRow endRow
-                    , col = move startCol endCol
-                }
+        posValue tile =
+            ( get tile, tile.value )
+
+        _ =
+            nextPos startPos
+
+        moveTiles tiles =
+            -- iterate over rows or columns (what is not changing)
+            List.range 1 boardSize
+                -- split list into chunks where row or column is the same
+                |>
+                    List.map (\s -> List.filter (\t -> same t == s) tiles)
+                -- sort each chunk
+                |>
+                    List.map (\chunk -> List.sortBy sortFn chunk)
+                -- produce the tuple of (chunk, target positions)
+                -- for each chunk
+                |>
+                    List.map
+                        (\chunk ->
+                            ( chunk
+                            , chunk
+                                |> List.map posValue
+                                |> collapse startPos nextPos
+                            )
+                        )
+                -- finally, move each tile to the target position
+                |>
+                    List.map
+                        (\( chunk, positions ) ->
+                            List.map2 set chunk positions
+                        )
+                |> List.concat
     in
-        Debug.log "tiles" List.map updateTile board
+        if sortDirection /= 0 then
+            moveTiles board
+        else
+            board
+
+
+
+-- UPDATE
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -102,7 +185,7 @@ update msg model =
     case msg of
         ArrowKey code ->
             ( { model
-                | board = updateBoard model.time code model.board
+                | board = moveBoard model.time code model.board
               }
             , Cmd.none
             )
@@ -139,12 +222,9 @@ isMoving model =
                     False
 
                 tile :: tail ->
-                    let
-                        moving =
-                            not (isDone time tile.row)
-                            || not (isDone time tile.col)
-                    in
-                        moving || isMoving_ time tail
+                    not (isDone time tile.row)
+                        || not (isDone time tile.col)
+                        || isMoving_ time tail
     in
         isMoving_ model.time model.board
 
@@ -198,7 +278,7 @@ viewTile : Time -> Tile -> Html Msg
 viewTile time tile =
     let
         ( top, left ) =
-            toTopLeft (animate time tile.row, animate time tile.col)
+            toTopLeft ( animate time tile.row, animate time tile.col )
     in
         viewBox left top "blue" (toString tile.value)
 
@@ -250,14 +330,7 @@ subscriptions model =
 
 
 
--- if not model.isMoving then
---     Sub.batch
---         [ Keyboard.downs ArrowKey
---         ]
--- else
---     Sub.batch
---         [ AnimationFrame.times Tick
---         ]
+-- MAIN
 
 
 main : Program Never Model Msg
