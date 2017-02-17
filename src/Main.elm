@@ -12,13 +12,13 @@ import Time exposing (Time, second)
 import Tuple exposing (mapFirst, mapSecond)
 
 
-type Msg
-    = ArrowKey Int
-    | Tick Time
-
-
-
 -- MODEL
+
+
+type BoardState
+    = AwaitingKeyPress
+    | MovingTiles
+    | CollapsingEquals
 
 
 type alias Direction =
@@ -28,6 +28,7 @@ type alias Direction =
 type alias Tile =
     { row : Animation
     , col : Animation
+    , size : Animation
     , value : Int
     }
 
@@ -39,12 +40,17 @@ type alias Board =
 type alias Model =
     { board : Board
     , time : Time
+    , boardState : BoardState
     }
 
 
 createTile : Int -> Int -> Int -> Tile
 createTile row col value =
-    Tile (toFloat row |> static) (toFloat col |> static) value
+    Tile
+        (toFloat row |> static)
+        (toFloat col |> static)
+        (static cellWidth)
+        value
 
 
 init : ( Model, Cmd Msg )
@@ -52,11 +58,27 @@ init =
     ( { board =
             [ createTile 1 1 2
             , createTile 1 2 2
+            , createTile 1 3 4
             ]
+      , boardState = AwaitingKeyPress
       , time = 0
       }
     , Cmd.none
     )
+
+
+sizeAnimation : Time -> Animation
+sizeAnimation time =
+    let
+        start =
+            cellWidth - 6
+    in
+        animation time |> from start |> to cellWidth |> duration (0.3 * second)
+
+
+resizeTile : Time -> Tile -> Tile
+resizeTile time tile =
+    { tile | size = sizeAnimation time }
 
 
 moveTile : Time -> Int -> Int -> Tile -> Tile
@@ -77,8 +99,8 @@ moveTile time row col tile =
         }
 
 
-collapse : Int -> (Int -> Int) -> List ( Int, Int ) -> List Int
-collapse startPos nextPos positions =
+newPositions : Int -> (Int -> Int) -> List ( Int, Int ) -> List Int
+newPositions startPos nextPos positions =
     let
         acc =
             ( startPos, 0, False )
@@ -127,11 +149,11 @@ moveBoard time direction board =
                 , \t v -> moveTile time v (same t) t
                 )
 
-        ( startPos, nextPos ) =
+        startPos =
             if sortDirection == 1 then
-                ( 0, (+) 1 )
+                0
             else
-                ( boardSize + 1, (+) -1 )
+                boardSize + 1
 
         sortFn tile =
             (get tile) * sortDirection
@@ -139,12 +161,9 @@ moveBoard time direction board =
         posValue tile =
             ( get tile, tile.value )
 
-        _ =
-            nextPos startPos
-
         moveTiles tiles =
             -- iterate over rows or columns (what is not changing)
-            List.range 1 boardSize
+            range
                 -- split list into chunks where row or column is the same
                 |>
                     List.map (\s -> List.filter (\t -> same t == s) tiles)
@@ -159,7 +178,7 @@ moveBoard time direction board =
                             ( chunk
                             , chunk
                                 |> List.map posValue
-                                |> collapse startPos nextPos
+                                |> newPositions startPos ((+) sortDirection)
                             )
                         )
                 -- finally, move each tile to the target position
@@ -176,8 +195,70 @@ moveBoard time direction board =
             board
 
 
+findTiles : ( Int, Int ) -> Board -> List Tile
+findTiles ( row, col ) =
+    List.filter
+        (\t ->
+            (getTo t.row) == (toFloat row) && (getTo t.col) == (toFloat col)
+        )
+
+
+collapseBoard : Time -> Board -> Board
+collapseBoard time board =
+    let
+        filterTiles tiles =
+            case tiles of
+                t1 :: t2 :: [] ->
+                    let
+                        nextTile =
+                            resizeTile time t1
+                    in
+                        [ { nextTile | value = t1.value * 2 } ]
+
+                _ ->
+                    tiles
+    in
+        cells
+            |> List.map (\cell -> (findTiles cell >> filterTiles) board)
+            |> List.concat
+
+
 
 -- UPDATE
+
+
+type Msg
+    = ArrowKey Int
+    | Tick Time
+
+
+updateTick : Time -> Model -> ( Model, Cmd Msg )
+updateTick time model =
+    let
+        waitForAnimation model nextBoardState =
+            if isAnimationRunning model then
+                model
+            else
+                { model | boardState = nextBoardState }
+
+        nextModel =
+            case model.boardState of
+                AwaitingKeyPress ->
+                    model
+
+                MovingTiles ->
+                    if isAnimationRunning model then
+                        model
+                    else
+                        { model
+                            | boardState = CollapsingEquals
+                            , board = collapseBoard model.time model.board
+                        }
+
+                CollapsingEquals ->
+                    waitForAnimation model AwaitingKeyPress
+    in
+        ( { nextModel | time = time }, Cmd.none )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -186,12 +267,13 @@ update msg model =
         ArrowKey code ->
             ( { model
                 | board = moveBoard model.time code model.board
+                , boardState = MovingTiles
               }
             , Cmd.none
             )
 
         Tick time ->
-            ( { model | time = time }, Cmd.none )
+            updateTick time model
 
 
 
@@ -213,10 +295,10 @@ borderWidth =
     5
 
 
-isMoving : Model -> Bool
-isMoving model =
+isAnimationRunning : Model -> Bool
+isAnimationRunning model =
     let
-        isMoving_ time tiles =
+        isBoardAnimationRunning_ time tiles =
             case tiles of
                 [] ->
                     False
@@ -224,27 +306,31 @@ isMoving model =
                 tile :: tail ->
                     not (isDone time tile.row)
                         || not (isDone time tile.col)
-                        || isMoving_ time tail
+                        || isBoardAnimationRunning_ time tail
     in
-        isMoving_ model.time model.board
+        isBoardAnimationRunning_ model.time model.board
 
 
-toTopLeft : ( number, number ) -> ( Float, Float )
-toTopLeft ( row, col ) =
-    ( borderWidth * row + (row - 1) * cellWidth
-    , borderWidth * col + (col - 1) * cellWidth
-    )
+toTopLeft : Float -> Float -> Float -> ( Float, Float )
+toTopLeft row col size =
+    let
+        center =
+            (cellWidth - size) / 2.0
+    in
+        ( center + borderWidth * row + (row - 1) * cellWidth
+        , center + borderWidth * col + (col - 1) * cellWidth
+        )
 
 
-viewBox : Float -> Float -> String -> String -> Html Msg
-viewBox left top color text =
+viewBox : Float -> Float -> Float -> String -> String -> Html Msg
+viewBox left top size color text =
     Html.div
         [ style
             [ ( "position", "absolute" )
             , ( "left", toString left ++ "px" )
             , ( "top", toString top ++ "px" )
-            , ( "width", toString cellWidth ++ "px" )
-            , ( "height", toString cellWidth ++ "px" )
+            , ( "width", toString size ++ "px" )
+            , ( "height", toString size ++ "px" )
             , ( "backgroundColor", color )
             , ( "textAlign", "center" )
             , ( "verticalAlign", "middle" )
@@ -257,30 +343,26 @@ viewCell : ( Int, Int ) -> Html Msg
 viewCell ( row, col ) =
     let
         ( top, left ) =
-            toTopLeft ( row, col )
+            toTopLeft (toFloat row) (toFloat col) cellWidth
     in
-        viewBox left top "gray" ""
+        viewBox left top cellWidth "gray" ""
 
 
 viewCells : List (Html Msg)
 viewCells =
-    let
-        range =
-            List.range 1 boardSize
-    in
-        range
-            |> List.map (\x -> List.map ((,) x) range)
-            |> List.concat
-            |> List.map viewCell
+    cells |> List.map viewCell
 
 
 viewTile : Time -> Tile -> Html Msg
 viewTile time tile =
     let
+        size =
+            animate time tile.size
+
         ( top, left ) =
-            toTopLeft ( animate time tile.row, animate time tile.col )
+            toTopLeft (animate time tile.row) (animate time tile.col) size
     in
-        viewBox left top "blue" (toString tile.value)
+        viewBox left top size "blue" (toString tile.value)
 
 
 viewBoard : Time -> Board -> Html Msg
@@ -310,7 +392,7 @@ view model =
         [ style [ ( "position", "relative" ) ] ]
         [ viewBoard model.time model.board
         , Html.text (toString model)
-        , Html.text (" isMoving " ++ toString (isMoving model))
+        , Html.text (" isAnimationRunning " ++ toString (isAnimationRunning model))
         ]
 
 
@@ -321,12 +403,28 @@ view model =
 subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
-        [ if isMoving model then
-            Sub.none
-          else
+        [ if model.boardState == AwaitingKeyPress then
             Keyboard.downs ArrowKey
+          else
+            Sub.none
         , AnimationFrame.times Tick
         ]
+
+
+
+-- UTILS
+
+
+range : List Int
+range =
+    List.range 1 boardSize
+
+
+cells : List ( Int, Int )
+cells =
+    range
+        |> List.map (\x -> List.map ((,) x) range)
+        |> List.concat
 
 
 
