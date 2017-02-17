@@ -19,10 +19,14 @@ type BoardState
     = AwaitingKeyPress
     | MovingTiles
     | CollapsingEquals
+    | GettingNewNumber
 
 
-type alias Direction =
-    Int
+type Direction
+    = Left
+    | Up
+    | Right
+    | Down
 
 
 type alias Tile =
@@ -73,7 +77,7 @@ sizeAnimation time =
         start =
             cellWidth - 6
     in
-        animation time |> from start |> to cellWidth |> duration (0.3 * second)
+        animation time |> from start |> to cellWidth |> duration (0.2 * second)
 
 
 resizeTile : Time -> Tile -> Tile
@@ -91,7 +95,7 @@ moveTile time row col tile =
                 animation time
                     |> from start
                     |> to end
-                    |> duration (0.3 * second)
+                    |> duration (0.2 * second)
     in
         { tile
             | row = move (getTo tile.row) (toFloat row)
@@ -122,20 +126,18 @@ moveBoard time direction board =
     let
         ( changing, sortDirection ) =
             case direction of
-                37 ->
+                Left ->
                     ( "col", 1 )
 
-                38 ->
+                Up ->
                     ( "row", 1 )
 
-                39 ->
+                Right ->
                     ( "col", -1 )
 
-                40 ->
+                Down ->
                     ( "row", -1 )
 
-                _ ->
-                    ( "", 0 )
 
         ( same, get, set ) =
             if changing == "col" then
@@ -223,6 +225,16 @@ collapseBoard time board =
             |> List.concat
 
 
+emptyCells : Board -> List ( Int, Int )
+emptyCells board =
+    cells |> List.filter (\cell -> (findTiles cell board |> List.length) == 0)
+
+
+addTile : ( Int, Int ) -> Board -> Board
+addTile ( row, col ) board =
+    board ++ [ createTile row col 2 ]
+
+
 
 -- UPDATE
 
@@ -235,12 +247,6 @@ type Msg
 updateTick : Time -> Model -> ( Model, Cmd Msg )
 updateTick time model =
     let
-        waitForAnimation model nextBoardState =
-            if isAnimationRunning model then
-                model
-            else
-                { model | boardState = nextBoardState }
-
         nextModel =
             case model.boardState of
                 AwaitingKeyPress ->
@@ -256,21 +262,62 @@ updateTick time model =
                         }
 
                 CollapsingEquals ->
-                    waitForAnimation model AwaitingKeyPress
+                    if isAnimationRunning model then
+                        model
+                    else
+                        case emptyCells model.board of
+                            [] ->
+                                { model | boardState = AwaitingKeyPress }
+
+                            first :: _ ->
+                                { model
+                                    | boardState = GettingNewNumber
+                                    , board = addTile first model.board
+                                }
+
+                GettingNewNumber ->
+                    if isAnimationRunning model then
+                        model
+                    else
+                        { model | boardState = AwaitingKeyPress }
     in
         ( { nextModel | time = time }, Cmd.none )
+
+
+keyCodeToDirection : Int -> Maybe Direction
+keyCodeToDirection code =
+    case code of
+        37 ->
+            Just Left
+
+        38 ->
+            Just Up
+
+        39 ->
+            Just Right
+
+        40 ->
+            Just Down
+
+        _ ->
+            Nothing
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         ArrowKey code ->
-            ( { model
-                | board = moveBoard model.time code model.board
-                , boardState = MovingTiles
-              }
-            , Cmd.none
-            )
+            case keyCodeToDirection code of
+                Just direction ->
+                    ( { model
+                        | board = moveBoard model.time direction model.board
+                        , boardState = MovingTiles
+                      }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
 
         Tick time ->
             updateTick time model
@@ -287,7 +334,7 @@ boardSize =
 
 cellWidth : number
 cellWidth =
-    40
+    80
 
 
 borderWidth : number
@@ -391,7 +438,8 @@ view model =
     Html.div
         [ style [ ( "position", "relative" ) ] ]
         [ viewBoard model.time model.board
-        , Html.text (toString model)
+        , Html.text (List.length model.board |> toString)
+        , Html.text (" currentState " ++ toString model.boardState)
         , Html.text (" isAnimationRunning " ++ toString (isAnimationRunning model))
         ]
 
