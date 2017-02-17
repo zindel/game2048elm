@@ -7,7 +7,7 @@ import Keyboard
 import List
 import Debug
 import AnimationFrame
-import Animation exposing (Animation, animate, animation, from, to, static, duration, isDone)
+import Animation exposing (Animation, animate, animation, from, to, static, duration, isDone, getTo)
 import Time exposing (Time, second)
 import Tuple exposing (mapFirst, mapSecond)
 
@@ -18,7 +18,8 @@ type Msg
 
 
 type alias Tile =
-    { pos : ( Animation, Animation )
+    { row : Animation
+    , col : Animation
     , value : Int
     }
 
@@ -33,15 +34,15 @@ type alias Model =
     }
 
 
-initialTile : ( Int, Int ) -> Int -> Tile
-initialTile ( x, y ) value =
-    Tile ( toFloat x |> static, toFloat y |> static ) value
+createTile : Int -> Int -> Int -> Tile
+createTile row col value =
+    Tile (toFloat row |> static) (toFloat col |> static) value
 
 
 init : ( Model, Cmd Msg )
 init =
     ( { board =
-            [ initialTile ( 1, 1 ) 2
+            [ createTile 1 1 2
             ]
       , time = 0
       }
@@ -59,7 +60,7 @@ updateBoard time key board =
         fn =
             case key of
                 37 ->
-                    \( row, col ) ->
+                    \row col ->
                         ( row
                         , if col == 1 then
                             4
@@ -68,7 +69,7 @@ updateBoard time key board =
                         )
 
                 _ ->
-                    identity
+                    \row col -> (row, col)
 
         move s e =
             if s == e then
@@ -79,15 +80,19 @@ updateBoard time key board =
         updateTile : Tile -> Tile
         updateTile tile =
             let
-                ( sr, sc ) =
-                    tile.pos
-                        |> mapFirst (animate time)
-                        |> mapSecond (animate time)
+                startRow =
+                    getTo tile.row
 
-                ( er, ec ) =
-                    fn ( sr, sc )
+                startCol =
+                    getTo tile.col
+
+                ( endRow, endCol ) =
+                    fn startRow startCol
             in
-                { tile | pos = ( move sr er, move sc ec ) }
+                { tile
+                    | row = move startRow endRow
+                    , col = move startCol endCol
+                }
     in
         Debug.log "tiles" List.map updateTile board
 
@@ -136,15 +141,10 @@ isMoving model =
                 tile :: tail ->
                     let
                         moving =
-                            tile.pos
-                                |> mapFirst (isDone time)
-                                |> mapSecond (isDone time)
-                                |> (/=) ( True, True )
+                            not (isDone time tile.row)
+                            || not (isDone time tile.col)
                     in
-                        if moving then
-                            moving
-                        else
-                            isMoving_ time tail
+                        moving || isMoving_ time tail
     in
         isMoving_ model.time model.board
 
@@ -198,10 +198,7 @@ viewTile : Time -> Tile -> Html Msg
 viewTile time tile =
     let
         ( top, left ) =
-            tile.pos
-                |> mapFirst (animate time)
-                |> mapSecond (animate time)
-                |> toTopLeft
+            toTopLeft (animate time tile.row, animate time tile.col)
     in
         viewBox left top "blue" (toString tile.value)
 
@@ -233,7 +230,7 @@ view model =
         [ style [ ( "position", "relative" ) ] ]
         [ viewBoard model.time model.board
         , Html.text (toString model)
-        , Html.text ("isMoving" ++ toString (isMoving model))
+        , Html.text (" isMoving " ++ toString (isMoving model))
         ]
 
 
