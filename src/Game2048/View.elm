@@ -9,12 +9,8 @@ import Animation exposing (animate)
 
 import Game2048.Util exposing (cells)
 
-borderWidth : number
-borderWidth =
-    5
-
-toTopLeft : Float -> Float -> Float -> Float -> ( Float, Float )
-toTopLeft cellWidth row col size =
+toTopLeft : Float -> Float -> Float -> Float -> Float -> ( Float, Float )
+toTopLeft borderWidth cellWidth row col size =
     let
         center =
             (cellWidth - size) / 2.0
@@ -33,6 +29,7 @@ viewBox left top size color text =
             , ( "top", toString top ++ "px" )
             , ( "width", toString size ++ "px" )
             , ( "height", toString size ++ "px" )
+            , ( "line-height", toString size ++ "px" )
             , ( "backgroundColor", color )
             , ( "textAlign", "center" )
             , ( "verticalAlign", "middle" )
@@ -41,28 +38,28 @@ viewBox left top size color text =
         [ Html.text text ]
 
 
-viewCell : Float -> ( Int, Int ) -> Html Msg
-viewCell cellWidth ( row, col ) =
+viewCell : Float -> Float -> ( Int, Int ) -> Html Msg
+viewCell borderWidth cellWidth ( row, col ) =
     let
         ( top, left ) =
-            toTopLeft cellWidth (toFloat row) (toFloat col) cellWidth
+            toTopLeft borderWidth cellWidth (toFloat row) (toFloat col) cellWidth
     in
         viewBox left top cellWidth "gray" ""
 
 
-viewCells : Float -> List (Html Msg)
-viewCells cellWidth =
-    cells boardSize |> List.map (viewCell cellWidth)
+viewCells : Float -> Float -> List (Html Msg)
+viewCells borderWidth cellWidth =
+    cells boardSize |> List.map (viewCell borderWidth cellWidth)
 
 
-viewTile : Float -> Time -> Tile -> Html Msg
-viewTile cellWidth time tile =
+viewTile : Float -> Float -> Time -> Tile -> Html Msg
+viewTile borderWidth cellWidth time tile =
     let
         size =
             animate time tile.size
 
         ( top, left ) =
-            toTopLeft cellWidth (animate time tile.row) (animate time tile.col) size
+            toTopLeft borderWidth cellWidth (animate time tile.row) (animate time tile.col) size
     in
         viewBox left top size "blue" (toString tile.value)
 
@@ -71,9 +68,9 @@ viewBoard : Model -> Html Msg
 viewBoard model =
     let
         viewTiles =
-            List.map (viewTile model.cellWidth model.time) model.board
+            List.map (viewTile model.borderWidth model.cellWidth model.time) model.board
     in
-        viewCells model.cellWidth
+        viewCells model.borderWidth model.cellWidth
             ++ viewTiles
             |> Html.div
                 [ style

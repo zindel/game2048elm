@@ -4,13 +4,7 @@ import Game2048.Util exposing (cells)
 import Animation exposing (Animation, getTo, animation, from, to, static, duration)
 import Time exposing (Time, second)
 import Window
-
-
-type BoardState
-    = AwaitingKeyPress
-    | MovingTiles
-    | CollapsingEquals
-    | GettingNewNumber
+import Random
 
 
 type Direction
@@ -58,6 +52,7 @@ type alias Model =
     , width : Float
     , left : Float
     , cellWidth : Float
+    , borderWidth : Float
     }
 
 
@@ -88,6 +83,7 @@ init initialBoard =
     , width = 0
     , left = 0
     , cellWidth = 0
+    , borderWidth = 0
     }
 
 
@@ -153,8 +149,8 @@ newPositions startPos nextPos positions =
             |> List.drop 1
 
 
-moveBoard : Direction -> Model -> Model
-moveBoard direction model =
+move : Direction -> Model -> Model
+move direction model =
     let
         ( changing, sortDirection ) =
             case direction of
@@ -233,8 +229,8 @@ findTiles ( row, col ) =
         )
 
 
-collapseBoard : Model -> Model
-collapseBoard model =
+collapse : Model -> Model
+collapse model =
     let
         filterTiles tiles =
             case tiles of
@@ -260,3 +256,59 @@ emptyCells : Board -> List ( Int, Int )
 emptyCells board =
     cells boardSize
         |> List.filter (\cell -> (findTiles cell board |> List.length) == 0)
+
+
+addRandomTileCmd : Model -> Cmd Msg
+addRandomTileCmd model =
+    let
+        empty =
+            emptyCells model.board
+
+        takeCell n =
+            List.drop (n - 1) empty |> List.head |> Maybe.withDefault ( 0, 0 )
+
+        generator =
+            Random.map
+                (\n ->
+                    let
+                        ( row, col ) =
+                            takeCell n
+                    in
+                        TileData row col 2
+                )
+                (Random.int 1 (List.length empty))
+    in
+        Random.generate AddTile generator
+
+
+resize : Window.Size -> Model -> Model
+resize { width, height } model =
+    let
+        gameWidth =
+            toFloat height
+                * 0.7
+                |> min (toFloat width * 0.6)
+                |> max 300.0
+
+        borderWidth =
+            gameWidth * 0.1 / (boardSize + 1)
+
+        gameLeft =
+            toFloat width / 2.0 - gameWidth / 2 |> max 0
+
+        cellWidth =
+            (gameWidth - borderWidth * (boardSize + 1)) / boardSize
+    in
+        { model
+            | width = gameWidth
+            , left = gameLeft
+            , cellWidth = cellWidth
+            , borderWidth = borderWidth
+            , board =
+                model.board
+                    |> List.map (resizeTile cellWidth model.time)
+        }
+
+isRunning : Model -> Bool
+isRunning model =
+    isBoardReady model.board || model.nextMsg /= NoOp
