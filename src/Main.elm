@@ -50,7 +50,8 @@ type alias Board =
 
 
 type Msg
-    = Init ( Window.Size, Time )
+    = Init Time
+    | Resize Window.Size
     | Move Direction
     | Collapse
     | AddRandomTile
@@ -63,8 +64,10 @@ type alias Model =
     { initialBoard : List TileData
     , board : Board
     , time : Time
-    , boardState : BoardState
     , nextMsg : Msg
+    , width : Float
+    , left : Float
+    , cellWidth : Float
     }
 
 
@@ -75,28 +78,21 @@ addTile model { row, col, value } =
             Tile
                 (toFloat row |> static)
                 (toFloat col |> static)
-                (sizeAnimation model.time)
+                (sizeAnimation model.cellWidth model.time)
                 value
     in
         { model | board = model.board ++ [ tile ] }
-
-
-createTile : Time -> Int -> Int -> Int -> Tile
-createTile time row col value =
-    Tile
-        (toFloat row |> static)
-        (toFloat col |> static)
-        (sizeAnimation time)
-        value
 
 
 init : List TileData -> Model
 init initialBoard =
     { initialBoard = initialBoard
     , board = []
-    , boardState = AwaitingKeyPress
     , time = 0
     , nextMsg = NoOp
+    , width = 0
+    , left = 0
+    , cellWidth = 0
     }
 
 
@@ -113,18 +109,17 @@ isBoardReady board =
             True
 
 
-sizeAnimation : Time -> Animation
-sizeAnimation time =
-    let
-        start =
-            cellWidth - 6
-    in
-        animation time |> from start |> to cellWidth |> duration (0.2 * second)
+sizeAnimation : Float -> Time -> Animation
+sizeAnimation cellWidth time =
+    animation time
+        |> from (cellWidth * 0.75)
+        |> to cellWidth
+        |> duration (0.1 * second)
 
 
-resizeTile : Time -> Tile -> Tile
-resizeTile time tile =
-    { tile | size = sizeAnimation time }
+resizeTile : Float -> Time -> Tile -> Tile
+resizeTile cellWidth time tile =
+    { tile | size = sizeAnimation cellWidth time }
 
 
 moveTile : Time -> Int -> Int -> Tile -> Tile
@@ -137,7 +132,7 @@ moveTile time row col tile =
                 animation time
                     |> from start
                     |> to end
-                    |> duration (0.2 * second)
+                    |> duration (0.12 * second)
     in
         { tile
             | row = move (getTo tile.row) (toFloat row)
@@ -251,7 +246,7 @@ collapseBoard model =
                 t1 :: t2 :: [] ->
                     let
                         nextTile =
-                            resizeTile model.time t1
+                            resizeTile model.cellWidth model.time t1
                     in
                         [ { nextTile | value = t1.value * 2 } ]
 
@@ -272,16 +267,7 @@ emptyCells board =
 
 
 
--- addTile : Time -> ( Int, Int ) -> Board -> Board
--- addTile time ( row, col ) board =
---     board ++ [ createTile time row col 2 ]
 -- UPDATE
-
-
-initCmd : Cmd Msg
-initCmd =
-    Task.map2 (,) Window.size Time.now
-        |> Task.perform Init
 
 
 addRandomTileCmd : Model -> Cmd Msg
@@ -325,12 +311,36 @@ update msg model =
                     addTile model tileData |> initModel tail
     in
         case msg of
-            Init ( size, time ) ->
+            Init time ->
                 let
                     nextModel =
                         initModel model.initialBoard ({ model | time = time })
                 in
                     nextModel ! [ addRandomTileOnInitCmd nextModel ]
+
+            Resize { width, height } ->
+                let
+                    gameWidth =
+                        toFloat height
+                            * 0.7
+                            |> min (toFloat width * 0.6)
+                            |> max 300.0
+
+                    gameLeft =
+                        toFloat width / 2.0 - gameWidth / 2 |> max 0
+
+                    cellWidth =
+                        (gameWidth - borderWidth * (boardSize + 1)) / boardSize
+                in
+                    { model
+                        | width = gameWidth
+                        , left = gameLeft
+                        , cellWidth = cellWidth
+                        , board =
+                            model.board
+                                |> List.map (resizeTile cellWidth model.time)
+                    }
+                        ! []
 
             AddTile tileData ->
                 let
@@ -399,8 +409,8 @@ isAnimationRunning model =
         isBoardAnimationRunning_ model.time model.board
 
 
-toTopLeft : Float -> Float -> Float -> ( Float, Float )
-toTopLeft row col size =
+toTopLeft : Float -> Float -> Float -> Float -> ( Float, Float )
+toTopLeft cellWidth row col size =
     let
         center =
             (cellWidth - size) / 2.0
@@ -427,48 +437,47 @@ viewBox left top size color text =
         [ Html.text text ]
 
 
-viewCell : ( Int, Int ) -> Html Msg
-viewCell ( row, col ) =
+viewCell : Float -> ( Int, Int ) -> Html Msg
+viewCell cellWidth ( row, col ) =
     let
         ( top, left ) =
-            toTopLeft (toFloat row) (toFloat col) cellWidth
+            toTopLeft cellWidth (toFloat row) (toFloat col) cellWidth
     in
         viewBox left top cellWidth "gray" ""
 
 
-viewCells : List (Html Msg)
-viewCells =
-    cells |> List.map viewCell
+viewCells : Float -> List (Html Msg)
+viewCells cellWidth =
+    cells |> List.map (viewCell cellWidth)
 
 
-viewTile : Time -> Tile -> Html Msg
-viewTile time tile =
+viewTile : Float -> Time -> Tile -> Html Msg
+viewTile cellWidth time tile =
     let
         size =
             animate time tile.size
 
         ( top, left ) =
-            toTopLeft (animate time tile.row) (animate time tile.col) size
+            toTopLeft cellWidth (animate time tile.row) (animate time tile.col) size
     in
         viewBox left top size "blue" (toString tile.value)
 
 
-viewBoard : Time -> Board -> Html Msg
-viewBoard time board =
+viewBoard : Model -> Html Msg
+viewBoard model =
     let
-        boardSizePx =
-            cellWidth * boardSize + (borderWidth * (boardSize + 1))
-
         viewTiles =
-            List.map (viewTile time) board
+            List.map (viewTile model.cellWidth model.time) model.board
     in
-        viewCells
+        viewCells model.cellWidth
             ++ viewTiles
             |> Html.div
                 [ style
-                    [ ( "position", "relative" )
-                    , ( "width", toString boardSizePx ++ "px" )
-                    , ( "height", toString boardSizePx ++ "px" )
+                    [ ( "position", "absolute" )
+                    , ( "left", "0px" )
+                    , ( "top", "0px" )
+                    , ( "width", toString model.width ++ "px" )
+                    , ( "height", toString model.width ++ "px" )
                     , ( "backgroundColor", "green" )
                     ]
                 ]
@@ -477,10 +486,17 @@ viewBoard time board =
 view : Model -> Html Msg
 view model =
     Html.div
-        [ style [ ( "position", "relative" ) ] ]
-        [ viewBoard model.time model.board
+        [ style
+            [ ( "position", "absolute" )
+            , ( "left", toString model.left ++ "px" )
+            , ( "top", "0px" )
+            , ( "bottom", "0px" )
+            , ( "width", toString model.width ++ "px" )
+            , ( "backgroundColor", "yellow" )
+            ]
+        ]
+        [ viewBoard model
         , Html.text (List.length model.board |> toString)
-        , Html.text (" currentState " ++ toString model.boardState)
         , Html.text (" isAnimationRunning " ++ toString (isAnimationRunning model))
         ]
 
@@ -508,17 +524,21 @@ subscriptions model =
 
                 _ ->
                     NoOp
+
+        running =
+            if isBoardReady model.board || model.nextMsg /= NoOp then
+                Sub.batch
+                    [ if model.nextMsg == NoOp then
+                        Sub.map direction (Keyboard.downs identity)
+                      else
+                        Sub.none
+                    , AnimationFrame.times Tick
+                    ]
+            else
+                Sub.none
     in
-        if isBoardReady model.board then
-            Sub.batch
-                [ if model.nextMsg == NoOp then
-                    Sub.map direction (Keyboard.downs identity)
-                  else
-                    Sub.none
-                , AnimationFrame.times Tick
-                ]
-        else
-            Sub.none
+        Sub.batch
+            [ running, Window.resizes Resize ]
 
 
 
@@ -546,14 +566,13 @@ main =
     let
         initialModel =
             init []
-
-        -- [ TileData 1 1 2
-        -- , TileData 1 2 2
-        -- , TileData 1 3 4
-        -- ]
     in
         Html.program
-            { init = ( initialModel, initCmd )
+            { init =
+                initialModel
+                    ! [ Task.perform Resize Window.size
+                      , Task.perform Init Time.now
+                      ]
             , subscriptions = subscriptions
             , update = update
             , view = view
