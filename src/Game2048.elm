@@ -1,4 +1,4 @@
-module Main exposing (..)
+module Game2048 exposing (main)
 
 import Html exposing (Html)
 import Html.Attributes exposing (style)

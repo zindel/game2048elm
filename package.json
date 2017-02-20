@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "$(npm bin)/elm-live --path-to-elm-make=\"elm-make\" --output=build/elm.js src/Main.elm --yes"
+    "start": "$(npm bin)/elm-live --path-to-elm-make=\"elm-make\" --output=build/elm.js src/Game2048.elm --yes"
   },
   "repository": {
     "type": "git",
