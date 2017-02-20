@@ -2,14 +2,15 @@ module Main exposing (..)
 
 import Html exposing (Html)
 import Html.Attributes exposing (style)
-import Html.Events exposing (onClick)
 import Keyboard
 import List
 import Debug
 import AnimationFrame
 import Animation exposing (Animation, animate, animation, from, to, static, duration, isDone, getTo)
 import Time exposing (Time, second)
-import Tuple exposing (mapFirst, mapSecond)
+import Window
+import Task
+import Random
 
 
 -- MODEL
@@ -29,6 +30,13 @@ type Direction
     | Down
 
 
+type alias TileData =
+    { row : Int
+    , col : Int
+    , value : Int
+    }
+
+
 type alias Tile =
     { row : Animation
     , col : Animation
@@ -41,34 +49,68 @@ type alias Board =
     List Tile
 
 
+type Msg
+    = Init ( Window.Size, Time )
+    | Move Direction
+    | Collapse
+    | AddRandomTile
+    | AddTile TileData
+    | Tick Time
+    | NoOp
+
+
 type alias Model =
-    { board : Board
+    { initialBoard : List TileData
+    , board : Board
     , time : Time
     , boardState : BoardState
+    , nextMsg : Msg
     }
 
 
-createTile : Int -> Int -> Int -> Tile
-createTile row col value =
+addTile : Model -> TileData -> Model
+addTile model { row, col, value } =
+    let
+        tile =
+            Tile
+                (toFloat row |> static)
+                (toFloat col |> static)
+                (sizeAnimation model.time)
+                value
+    in
+        { model | board = model.board ++ [ tile ] }
+
+
+createTile : Time -> Int -> Int -> Int -> Tile
+createTile time row col value =
     Tile
         (toFloat row |> static)
         (toFloat col |> static)
-        (static cellWidth)
+        (sizeAnimation time)
         value
 
 
-init : ( Model, Cmd Msg )
-init =
-    ( { board =
-            [ createTile 1 1 2
-            , createTile 1 2 2
-            , createTile 1 3 4
-            ]
-      , boardState = AwaitingKeyPress
-      , time = 0
-      }
-    , Cmd.none
-    )
+init : List TileData -> Model
+init initialBoard =
+    { initialBoard = initialBoard
+    , board = []
+    , boardState = AwaitingKeyPress
+    , time = 0
+    , nextMsg = NoOp
+    }
+
+
+isBoardReady : Board -> Bool
+isBoardReady board =
+    case board of
+        [] ->
+            False
+
+        tile :: [] ->
+            tile.value > 4
+
+        _ ->
+            True
 
 
 sizeAnimation : Time -> Animation
@@ -121,8 +163,8 @@ newPositions startPos nextPos positions =
             |> List.drop 1
 
 
-moveBoard : Time -> Direction -> Board -> Board
-moveBoard time direction board =
+moveBoard : Direction -> Model -> Model
+moveBoard direction model =
     let
         ( changing, sortDirection ) =
             case direction of
@@ -138,17 +180,16 @@ moveBoard time direction board =
                 Down ->
                     ( "row", -1 )
 
-
         ( same, get, set ) =
             if changing == "col" then
                 ( .row >> getTo >> floor
                 , .col >> getTo >> floor
-                , \t v -> moveTile time (same t) v t
+                , \t v -> moveTile model.time (same t) v t
                 )
             else
                 ( .col >> getTo >> floor
                 , .row >> getTo >> floor
-                , \t v -> moveTile time v (same t) t
+                , \t v -> moveTile model.time v (same t) t
                 )
 
         startPos =
@@ -191,10 +232,7 @@ moveBoard time direction board =
                         )
                 |> List.concat
     in
-        if sortDirection /= 0 then
-            moveTiles board
-        else
-            board
+        { model | board = moveTiles model.board, nextMsg = Collapse }
 
 
 findTiles : ( Int, Int ) -> Board -> List Tile
@@ -205,24 +243,27 @@ findTiles ( row, col ) =
         )
 
 
-collapseBoard : Time -> Board -> Board
-collapseBoard time board =
+collapseBoard : Model -> Model
+collapseBoard model =
     let
         filterTiles tiles =
             case tiles of
                 t1 :: t2 :: [] ->
                     let
                         nextTile =
-                            resizeTile time t1
+                            resizeTile model.time t1
                     in
                         [ { nextTile | value = t1.value * 2 } ]
 
                 _ ->
                     tiles
+
+        nextBoard =
+            cells
+                |> List.map (\cell -> (findTiles cell >> filterTiles) model.board)
+                |> List.concat
     in
-        cells
-            |> List.map (\cell -> (findTiles cell >> filterTiles) board)
-            |> List.concat
+        { model | board = nextBoard, nextMsg = AddRandomTile }
 
 
 emptyCells : Board -> List ( Int, Int )
@@ -230,97 +271,96 @@ emptyCells board =
     cells |> List.filter (\cell -> (findTiles cell board |> List.length) == 0)
 
 
-addTile : ( Int, Int ) -> Board -> Board
-addTile ( row, col ) board =
-    board ++ [ createTile row col 2 ]
 
-
-
+-- addTile : Time -> ( Int, Int ) -> Board -> Board
+-- addTile time ( row, col ) board =
+--     board ++ [ createTile time row col 2 ]
 -- UPDATE
 
 
-type Msg
-    = ArrowKey Int
-    | Tick Time
+initCmd : Cmd Msg
+initCmd =
+    Task.map2 (,) Window.size Time.now
+        |> Task.perform Init
 
 
-updateTick : Time -> Model -> ( Model, Cmd Msg )
-updateTick time model =
+addRandomTileCmd : Model -> Cmd Msg
+addRandomTileCmd model =
     let
-        nextModel =
-            case model.boardState of
-                AwaitingKeyPress ->
-                    model
+        empty =
+            emptyCells model.board
 
-                MovingTiles ->
-                    if isAnimationRunning model then
-                        model
-                    else
-                        { model
-                            | boardState = CollapsingEquals
-                            , board = collapseBoard model.time model.board
-                        }
+        takeCell n =
+            List.drop (n - 1) empty |> List.head |> Maybe.withDefault ( 0, 0 )
 
-                CollapsingEquals ->
-                    if isAnimationRunning model then
-                        model
-                    else
-                        case emptyCells model.board of
-                            [] ->
-                                { model | boardState = AwaitingKeyPress }
-
-                            first :: _ ->
-                                { model
-                                    | boardState = GettingNewNumber
-                                    , board = addTile first model.board
-                                }
-
-                GettingNewNumber ->
-                    if isAnimationRunning model then
-                        model
-                    else
-                        { model | boardState = AwaitingKeyPress }
+        generator =
+            Random.map
+                (\n ->
+                    let
+                        ( row, col ) =
+                            takeCell n
+                    in
+                        TileData row col 2
+                )
+                (Random.int 1 (List.length empty))
     in
-        ( { nextModel | time = time }, Cmd.none )
-
-
-keyCodeToDirection : Int -> Maybe Direction
-keyCodeToDirection code =
-    case code of
-        37 ->
-            Just Left
-
-        38 ->
-            Just Up
-
-        39 ->
-            Just Right
-
-        40 ->
-            Just Down
-
-        _ ->
-            Nothing
+        Random.generate AddTile generator
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case msg of
-        ArrowKey code ->
-            case keyCodeToDirection code of
-                Just direction ->
-                    ( { model
-                        | board = moveBoard model.time direction model.board
-                        , boardState = MovingTiles
-                      }
-                    , Cmd.none
-                    )
+    let
+        addRandomTileOnInitCmd model =
+            if isBoardReady model.board then
+                Cmd.none
+            else
+                addRandomTileCmd model
 
-                Nothing ->
-                    ( model, Cmd.none )
+        initModel initialBoard model =
+            case initialBoard of
+                [] ->
+                    model
 
-        Tick time ->
-            updateTick time model
+                tileData :: tail ->
+                    addTile model tileData |> initModel tail
+    in
+        case msg of
+            Init ( size, time ) ->
+                let
+                    nextModel =
+                        initModel model.initialBoard ({ model | time = time })
+                in
+                    nextModel ! [ addRandomTileOnInitCmd nextModel ]
+
+            AddTile tileData ->
+                let
+                    nextModel =
+                        addTile model tileData
+                in
+                    { nextModel | nextMsg = NoOp }
+                        ! [ addRandomTileOnInitCmd nextModel ]
+
+            Move direction ->
+                moveBoard direction model ! []
+
+            Collapse ->
+                collapseBoard model ! []
+
+            AddRandomTile ->
+                model ! [ addRandomTileCmd model ]
+
+            Tick time ->
+                let
+                    nextModel =
+                        { model | time = time }
+                in
+                    if isAnimationRunning model then
+                        nextModel ! []
+                    else
+                        update model.nextMsg nextModel
+
+            NoOp ->
+                model ! []
 
 
 
@@ -353,6 +393,7 @@ isAnimationRunning model =
                 tile :: tail ->
                     not (isDone time tile.row)
                         || not (isDone time tile.col)
+                        || not (isDone time tile.size)
                         || isBoardAnimationRunning_ time tail
     in
         isBoardAnimationRunning_ model.time model.board
@@ -450,13 +491,34 @@ view model =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.batch
-        [ if model.boardState == AwaitingKeyPress then
-            Keyboard.downs ArrowKey
-          else
+    let
+        direction keyCode =
+            case keyCode of
+                37 ->
+                    Move Left
+
+                38 ->
+                    Move Up
+
+                39 ->
+                    Move Right
+
+                40 ->
+                    Move Down
+
+                _ ->
+                    NoOp
+    in
+        if isBoardReady model.board then
+            Sub.batch
+                [ if model.nextMsg == NoOp then
+                    Sub.map direction (Keyboard.downs identity)
+                  else
+                    Sub.none
+                , AnimationFrame.times Tick
+                ]
+        else
             Sub.none
-        , AnimationFrame.times Tick
-        ]
 
 
 
@@ -481,9 +543,18 @@ cells =
 
 main : Program Never Model Msg
 main =
-    Html.program
-        { init = init
-        , subscriptions = subscriptions
-        , update = update
-        , view = view
-        }
+    let
+        initialModel =
+            init []
+
+        -- [ TileData 1 1 2
+        -- , TileData 1 2 2
+        -- , TileData 1 3 4
+        -- ]
+    in
+        Html.program
+            { init = ( initialModel, initCmd )
+            , subscriptions = subscriptions
+            , update = update
+            , view = view
+            }
