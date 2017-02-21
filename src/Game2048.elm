@@ -1,6 +1,6 @@
 module Game2048 exposing (main)
 
-import Game2048.Model exposing (Model, Msg(..), Direction(..), boardSize, init, isBoardReady, collapse, move, addTile, resize, isRunning, addRandomTileCmd)
+import Game2048.Model exposing (Model, Msg(..), Direction(..), init, isBoardReady, collapse, move, addTile, resize, isRunning, addRandomTileCmd, addRandomTileOnInitCmd)
 import Game2048.View exposing (view)
 import Html exposing (Html)
 import Keyboard
@@ -19,12 +19,6 @@ import Task
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     let
-        addRandomTileOnInitCmd model =
-            if isBoardReady model.board then
-                Cmd.none
-            else
-                addRandomTileCmd model
-
         initModel initialBoard model =
             case initialBoard of
                 [] ->
@@ -142,17 +136,13 @@ subscriptions model =
 
 main : Program Never Model Msg
 main =
-    let
-        initialModel =
+    Html.program
+        { init =
             init []
-    in
-        Html.program
-            { init =
-                initialModel
-                    ! [ Task.perform Resize Window.size
-                      , Task.perform Init Time.now
-                      ]
-            , subscriptions = subscriptions
-            , update = update
-            , view = view
-            }
+                ! [ Task.perform Resize Window.size
+                  , Task.perform Init Time.now
+                  ]
+        , subscriptions = subscriptions
+        , update = update
+        , view = view
+        }

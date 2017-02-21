@@ -67,18 +67,19 @@ viewTile borderWidth cellWidth time tile =
 viewBoard : Model -> Html Msg
 viewBoard model =
     let
+        {width, borderWidth, cellWidth} = model.layout
         viewTiles =
-            List.map (viewTile model.borderWidth model.cellWidth model.time) model.board
+            List.map (viewTile borderWidth cellWidth model.time) model.board
     in
-        viewCells model.borderWidth model.cellWidth
+        viewCells borderWidth cellWidth
             ++ viewTiles
             |> Html.div
                 [ style
                     [ ( "position", "absolute" )
                     , ( "left", "0px" )
                     , ( "top", "0px" )
-                    , ( "width", toString model.width ++ "px" )
-                    , ( "height", toString model.width ++ "px" )
+                    , ( "width", toString width ++ "px" )
+                    , ( "height", toString width ++ "px" )
                     , ( "backgroundColor", "green" )
                     ]
                 ]
@@ -89,10 +90,10 @@ view model =
     Html.div
         [ style
             [ ( "position", "absolute" )
-            , ( "left", toString model.left ++ "px" )
+            , ( "left", toString model.layout.left ++ "px" )
             , ( "top", "0px" )
             , ( "bottom", "0px" )
-            , ( "width", toString model.width ++ "px" )
+            , ( "width", toString model.layout.width ++ "px" )
             , ( "backgroundColor", "yellow" )
             ]
         ]

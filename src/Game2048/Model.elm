@@ -44,15 +44,20 @@ type Msg
     | NoOp
 
 
+type alias Layout =
+    { width : Float
+    , left : Float
+    , cellWidth : Float
+    , borderWidth : Float
+    }
+
+
 type alias Model =
     { initialBoard : List TileData
     , board : Board
     , time : Time
     , nextMsg : Msg
-    , width : Float
-    , left : Float
-    , cellWidth : Float
-    , borderWidth : Float
+    , layout : Layout
     }
 
 
@@ -68,7 +73,7 @@ addTile model { row, col, value } =
             Tile
                 (toFloat row |> static)
                 (toFloat col |> static)
-                (sizeAnimation model.cellWidth model.time)
+                (sizeAnimation model.layout.cellWidth model.time)
                 value
     in
         { model | board = model.board ++ [ tile ] }
@@ -80,10 +85,7 @@ init initialBoard =
     , board = []
     , time = 0
     , nextMsg = NoOp
-    , width = 0
-    , left = 0
-    , cellWidth = 0
-    , borderWidth = 0
+    , layout = Layout 0 0 0 0
     }
 
 
@@ -237,7 +239,7 @@ collapse model =
                 t1 :: t2 :: [] ->
                     let
                         nextTile =
-                            resizeTile model.cellWidth model.time t1
+                            resizeTile model.layout.cellWidth model.time t1
                     in
                         [ { nextTile | value = t1.value * 2 } ]
 
@@ -281,6 +283,14 @@ addRandomTileCmd model =
         Random.generate AddTile generator
 
 
+addRandomTileOnInitCmd : Model -> Cmd Msg
+addRandomTileOnInitCmd model =
+    if isBoardReady model.board then
+        Cmd.none
+    else
+        addRandomTileCmd model
+
+
 resize : Window.Size -> Model -> Model
 resize { width, height } model =
     let
@@ -300,14 +310,12 @@ resize { width, height } model =
             (gameWidth - borderWidth * (boardSize + 1)) / boardSize
     in
         { model
-            | width = gameWidth
-            , left = gameLeft
-            , cellWidth = cellWidth
-            , borderWidth = borderWidth
+            | layout = Layout gameWidth gameLeft cellWidth borderWidth
             , board =
                 model.board
                     |> List.map (resizeTile cellWidth model.time)
         }
+
 
 isRunning : Model -> Bool
 isRunning model =
