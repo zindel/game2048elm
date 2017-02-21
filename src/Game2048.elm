@@ -1,7 +1,5 @@
 module Game2048 exposing (main)
 
-import Game2048.Model exposing (Model, Msg(..), Direction(..), init, isBoardReady, collapse, move, addTile, resize, isRunning, addRandomTileCmd, addRandomTileOnInitCmd)
-import Game2048.View exposing (view)
 import Html exposing (Html)
 import Keyboard
 import Debug
@@ -11,8 +9,9 @@ import Time exposing (Time)
 import Window
 import Task
 
+import Game2048.Model as M exposing (Model, Msg(..), Direction(..))
+import Game2048.View exposing (view)
 
--- MODEL
 -- UPDATE
 
 
@@ -25,7 +24,7 @@ update msg model =
                     model
 
                 tileData :: tail ->
-                    addTile model tileData |> initModel tail
+                    M.addTile model tileData |> initModel tail
     in
         case msg of
             Init time ->
@@ -33,27 +32,27 @@ update msg model =
                     nextModel =
                         initModel model.initialBoard ({ model | time = time })
                 in
-                    nextModel ! [ addRandomTileOnInitCmd nextModel ]
+                    nextModel ! [ M.addRandomTileOnInitCmd nextModel ]
 
             Resize size ->
-                resize size model ! []
+                M.resize size model ! []
 
             AddTile tileData ->
                 let
                     nextModel =
-                        addTile model tileData
+                        M.addTile model tileData
                 in
                     { nextModel | nextMsg = NoOp }
-                        ! [ addRandomTileOnInitCmd nextModel ]
+                        ! [ M.addRandomTileOnInitCmd nextModel ]
 
             Move direction ->
-                move direction model ! []
+                M.move direction model ! []
 
             Collapse ->
-                collapse model ! []
+                M.collapse model ! []
 
             AddRandomTile ->
-                model ! [ addRandomTileCmd model ]
+                model ! [ M.addRandomTileCmd model ]
 
             Tick time ->
                 let
@@ -115,7 +114,7 @@ subscriptions model =
                     NoOp
 
         running =
-            if isRunning model then
+            if M.isRunning model then
                 Sub.batch
                     [ if model.nextMsg == NoOp then
                         Sub.map direction (Keyboard.downs identity)
@@ -138,7 +137,7 @@ main : Program Never Model Msg
 main =
     Html.program
         { init =
-            init []
+            M.init []
                 ! [ Task.perform Resize Window.size
                   , Task.perform Init Time.now
                   ]

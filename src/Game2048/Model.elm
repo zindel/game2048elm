@@ -1,4 +1,20 @@
-module Game2048.Model exposing (..)
+module Game2048.Model
+    exposing
+        ( Model
+        , Msg(..)
+        , Direction(..)
+        , TileData
+        , Tile
+        , boardSize
+        , init
+        , collapse
+        , move
+        , addTile
+        , resize
+        , isRunning
+        , addRandomTileCmd
+        , addRandomTileOnInitCmd
+        )
 
 import Game2048.Util exposing (cells)
 import Animation exposing (Animation, getTo, animation, from, to, static, duration)
