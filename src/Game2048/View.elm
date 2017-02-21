@@ -1,6 +1,6 @@
 module Game2048.View exposing (..)
 
-import Game2048.Model exposing (Model, Msg, Tile, Layout, boardSize)
+import Game2048.Model exposing (Model, Msg, Tile, Layout, ScoreUpdate, boardSize)
 import Html exposing (Html)
 import Html.Attributes exposing (style, src)
 import Time exposing (Time)
@@ -179,8 +179,8 @@ viewTopText { cellWidth } =
             ]
 
 
-viewScoreBox : Layout -> String -> Int -> Html Msg
-viewScoreBox { cellWidth } title value =
+viewScoreBox : Layout -> String -> Int -> List (Html Msg) -> Html Msg
+viewScoreBox { cellWidth } title value scoreUpdates =
     let
         fontSize =
             cellWidth / 5
@@ -192,6 +192,19 @@ viewScoreBox { cellWidth } title value =
 
         numberDiv =
             Html.div [] [ Html.text (toString value) ]
+
+        runningDiv =
+            Html.div
+                [ style
+                    [ ( "position", "absolute" )
+                    , ( "display", "inline-block" )
+                    , ( "width", "auto" )
+                    , ( "height", "auto" )
+                    , ( "top", "-20px" )
+                    , ( "left", "20px" )
+                    ]
+                ]
+                [ Html.text "See" ]
     in
         Html.div
             [ style
@@ -210,23 +223,47 @@ viewScoreBox { cellWidth } title value =
                 , ( "borderRadius", "3px" )
                 ]
             ]
-            [ titleDiv, numberDiv ]
+            ([ titleDiv, numberDiv ] ++ scoreUpdates)
+
+
+viewScoreUpdate : Time -> ScoreUpdate -> Html Msg
+viewScoreUpdate time { value, index, animation } =
+    let
+        left = 10 + index * 10
+        top = (animate time animation) * 20
+    in
+        Html.div
+            [ style
+                [ ( "position", "absolute" )
+                , ( "display", "inline-block" )
+                , ( "width", "auto" )
+                , ( "height", "auto" )
+                , ( "top", toString top ++ "px" )
+                , ( "left", toString left ++ "px" )
+                ]
+            ]
+            [ Html.text ("+" ++ toString value) ]
 
 
 viewScore : Model -> Html Msg
 viewScore model =
-    Html.div
-        [ style
-            [ ( "position", "absolute" )
-            , ( "top", "4px" )
-            , ( "right", "0px" )
-            , ( "height", "auto" )
-            , ( "width", "auto" )
+    let
+        scoreUpdates =
+            model.scoreUpdates
+            |> List.map (viewScoreUpdate model.time)
+    in
+        Html.div
+            [ style
+                [ ( "position", "absolute" )
+                , ( "top", "4px" )
+                , ( "right", "0px" )
+                , ( "height", "auto" )
+                , ( "width", "auto" )
+                ]
             ]
-        ]
-        [ viewScoreBox model.layout "SCORE" 1560
-        , viewScoreBox model.layout "BEST" 262180
-        ]
+            [ viewScoreBox model.layout "SCORE" model.score scoreUpdates
+            , viewScoreBox model.layout "BEST" model.best []
+            ]
 
 
 viewNewGameButton : Layout -> Html Msg
@@ -273,14 +310,15 @@ view model =
             [ ( "position", "absolute" )
             , ( "left", toString model.layout.left ++ "px" )
             , ( "top", "0px" )
+            , ( "paddingTop", "20px" )
             , ( "width", toString model.layout.width ++ "px" )
             , ( "height", "auto" )
             ]
         ]
         [ viewHeader model
-        , Html.div [ style [("minHeight", "50px")]]
-            [ 
-            viewNewGameButton model.layout, viewTopText model.layout
+        , Html.div [ style [ ( "minHeight", "50px" ) ] ]
+            [ viewNewGameButton model.layout
+            , viewTopText model.layout
             ]
         , viewBoard model
         ]

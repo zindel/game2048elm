@@ -6,6 +6,7 @@ module Game2048.Model
         , TileData
         , Tile
         , Layout
+        , ScoreUpdate
         , boardSize
         , init
         , collapse
@@ -82,9 +83,19 @@ type alias Layout =
     }
 
 
+type alias ScoreUpdate =
+    { value : Int
+    , index : Int
+    , animation : Animation
+    }
+
+
 type alias Model =
     { initialBoard : List TileData
     , board : Board
+    , score : Int
+    , scoreUpdates : List ScoreUpdate
+    , best : Int
     , time : Time
     , nextMsg : Msg
     , layout : Layout
@@ -113,6 +124,9 @@ init : List TileData -> Model
 init initialBoard =
     { initialBoard = initialBoard
     , board = []
+    , score = 0
+    , scoreUpdates = []
+    , best = 0
     , time = 0
     , nextMsg = NoOp
     , layout = Layout 0 0 0 0
@@ -138,6 +152,11 @@ sizeAnimation cellWidth time =
         |> from (cellWidth * 0.5)
         |> to cellWidth
         |> duration (0.07 * second)
+
+
+scoreAnimation : Time -> Animation
+scoreAnimation time =
+    animation time |> from 1 |> to -1 |> duration (0.5 * second)
 
 
 resizeTile : Float -> Time -> Tile -> Tile
@@ -284,18 +303,49 @@ collapse model =
                     let
                         nextTile =
                             resizeTile model.layout.cellWidth model.time t1
+
+                        value =
+                            t1.value + t2.value
                     in
-                        [ { nextTile | value = t1.value * 2 } ]
+                        ( [ { nextTile | value = value } ], value )
 
                 _ ->
-                    tiles
+                    ( tiles, 0 )
 
-        nextBoard =
+        boardWithScores =
             cells boardSize
                 |> List.map (\cell -> (findTiles cell >> filterTiles) model.board)
-                |> List.concat
+
+        nextBoard =
+            boardWithScores |> List.map Tuple.first |> List.concat
+
+        scores =
+            boardWithScores
+                |> List.map Tuple.second
+                |> List.filter ((<) 0)
+
+        scoreSum =
+            (List.sum scores)
+
+        nextScore =
+            model.score + scoreSum
     in
-        { model | board = nextBoard, nextMsg = AddRandomTile }
+        { model
+            | board = nextBoard
+            , score = nextScore
+            , scoreUpdates =
+                model.scoreUpdates
+                    ++ [ ScoreUpdate scoreSum
+                            (List.length model.scoreUpdates)
+                            (scoreAnimation model.time)
+                       ]
+            , best =
+                if nextScore > model.best then
+                    nextScore
+                else
+                    model.best
+            , nextMsg = AddRandomTile
+        }
 
 
 emptyCells : Board -> List ( Int, Int )
@@ -314,15 +364,22 @@ addRandomTileCmd model =
             List.drop (n - 1) empty |> List.head |> Maybe.withDefault ( 0, 0 )
 
         generator =
-            Random.map
-                (\n ->
+            Random.map2
+                (\cell n ->
                     let
                         ( row, col ) =
-                            takeCell n
+                            takeCell cell
                     in
-                        TileData row col 2
+                        TileData row
+                            col
+                            (if n == 7 then
+                                4
+                             else
+                                2
+                            )
                 )
                 (Random.int 1 (List.length empty))
+                (Random.int 1 14)
     in
         Random.generate AddTile generator
 
