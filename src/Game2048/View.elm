@@ -2,7 +2,7 @@ module Game2048.View exposing (..)
 
 import Game2048.Model exposing (Model, Msg, Tile, Layout, boardSize)
 import Html exposing (Html)
-import Html.Attributes exposing (style)
+import Html.Attributes exposing (style, src)
 import Time exposing (Time)
 import Animation exposing (animate)
 import Color exposing (Color, rgba, rgb)
@@ -23,25 +23,30 @@ toTopLeft { borderWidth, cellWidth } row col size =
 viewBox : Float -> Float -> Float -> Color -> Color -> String -> Html Msg
 viewBox left top size color textColor text =
     let
-        fontSize = size / (String.length text |> max 2 |> toFloat)
+        floatLen =
+            toFloat (String.length text)
+
+        fontSize =
+            size / (floatLen / 2 + 1 |> max 2)
     in
-    Html.div
-        [ style
-            [ ( "position", "absolute" )
-            , ( "left", toString left ++ "px" )
-            , ( "top", toString top ++ "px" )
-            , ( "width", toString size ++ "px" )
-            , ( "height", toString size ++ "px" )
-            , ( "line-height", toString size ++ "px" )
-            , ( "backgroundColor", colorToCSS color )
-            , ( "color", colorToCSS textColor )
-            , ( "fontWeight", "bold" )
-            , ( "fontSize", toString fontSize  ++ "px")
-            , ( "textAlign", "center" )
-            , ( "verticalAlign", "middle" )
+        Html.div
+            [ style
+                [ ( "position", "absolute" )
+                , ( "left", toString left ++ "px" )
+                , ( "top", toString top ++ "px" )
+                , ( "width", toString size ++ "px" )
+                , ( "height", toString size ++ "px" )
+                , ( "line-height", toString size ++ "px" )
+                , ( "backgroundColor", colorToCSS color )
+                , ( "color", colorToCSS textColor )
+                , ( "fontWeight", "bold" )
+                , ( "fontSize", toString fontSize ++ "px" )
+                , ( "textAlign", "center" )
+                , ( "verticalAlign", "middle" )
+                , ( "borderRadius", "3px" )
+                ]
             ]
-        ]
-        [ Html.text text ]
+            [ Html.text text ]
 
 
 viewCell : Layout -> ( Int, Int ) -> Html Msg
@@ -117,14 +122,148 @@ viewBoard { layout, time, board } =
             ++ viewTiles
             |> Html.div
                 [ style
-                    [ ( "position", "absolute" )
-                    , ( "left", "0px" )
-                    , ( "top", "0px" )
+                    [ ( "position", "relative" )
                     , ( "width", toString layout.width ++ "px" )
                     , ( "height", toString layout.width ++ "px" )
+                    , ( "borderRadius", "3px" )
                     , ( "backgroundColor", "#bbada0" )
                     ]
                 ]
+
+
+viewLogo : Layout -> Html Msg
+viewLogo { cellWidth } =
+    let
+        fontSize =
+            cellWidth / 2
+
+        imgWidth =
+            fontSize / 1.5
+    in
+        Html.div
+            [ style
+                [ ( "fontWeight", "bold" )
+                , ( "fontSize", toString fontSize ++ "px" )
+                , ( "color", "#776e65" )
+                ]
+            ]
+            [ Html.img
+                [ style
+                    [ ( "width", toString imgWidth ++ "px" )
+                    , ( "marginRight", "5px" )
+                    ]
+                , src "http://elm-lang.org/assets/logo.svg"
+                ]
+                []
+            , Html.text "2048"
+            ]
+
+
+viewTopText : Layout -> Html Msg
+viewTopText { cellWidth } =
+    let
+        fontSize =
+            cellWidth / 6
+    in
+        Html.div
+            [ style
+                [ ( "fontSize", toString fontSize ++ "px" )
+                , ( "color", "#776e65" )
+                ]
+            ]
+            [ Html.text "Join numbers to get the "
+            , Html.b [] [ Html.text "2048" ]
+            , Html.text " tile!"
+            , Html.br [] []
+            , Html.text "Written in Elm just for fun."
+            ]
+
+
+viewScoreBox : Layout -> String -> Int -> Html Msg
+viewScoreBox { cellWidth } title value =
+    let
+        fontSize =
+            cellWidth / 5
+
+        titleDiv =
+            Html.div
+                [ style [ ( "fontSize", "60%" ), ( "color", "#eee4da" ) ] ]
+                [ Html.text title ]
+
+        numberDiv =
+            Html.div [] [ Html.text (toString value) ]
+    in
+        Html.div
+            [ style
+                [ ( "position", "relative" )
+                , ( "display", "inline-block" )
+                , ( "height", toString (cellWidth * 0.43) ++ "px" )
+                , ( "width", toString (cellWidth * 0.85) ++ "px" )
+                , ( "marginLeft", "6px" )
+                , ( "padding", "3px" )
+                , ( "fontSize", toString fontSize ++ "px" )
+                , ( "lineHeight", toString fontSize ++ "px" )
+                , ( "fontWeight", "bold" )
+                , ( "textAlign", "center" )
+                , ( "backgroundColor", "#bbada0" )
+                , ( "color", "white" )
+                , ( "borderRadius", "3px" )
+                ]
+            ]
+            [ titleDiv, numberDiv ]
+
+
+viewScore : Model -> Html Msg
+viewScore model =
+    Html.div
+        [ style
+            [ ( "position", "absolute" )
+            , ( "top", "4px" )
+            , ( "right", "0px" )
+            , ( "height", "auto" )
+            , ( "width", "auto" )
+            ]
+        ]
+        [ viewScoreBox model.layout "SCORE" 1560
+        , viewScoreBox model.layout "BEST" 262180
+        ]
+
+
+viewNewGameButton : Layout -> Html Msg
+viewNewGameButton { cellWidth } =
+    let
+        fontSize =
+            cellWidth / 5
+    in
+        Html.button
+            [ style
+                [ ( "float", "right" )
+                , ( "padding", "11px" )
+                , ( "color", "#f9f6f2" )
+                , ( "backgroundColor", "#8f7a66" )
+                , ( "borderRadius", "3px" )
+                , ( "fontWeight", "bold" )
+                , ( "border", "none" )
+                , ( "cursor", "pointer" )
+                , ( "fontSize", toString fontSize ++ "px" )
+                , ( "lineHeight", toString fontSize ++ "px" )
+                ]
+            ]
+            [ Html.text "New Game" ]
+
+
+viewHeader : Model -> Html Msg
+viewHeader model =
+    Html.div
+        [ style
+            [ ( "position", "relative" )
+            , ( "width", "auto" )
+            , ( "minHeight", "55px" )
+            ]
+        ]
+        [ viewLogo model.layout
+        , viewScore model
+        ]
 
 
 view : Model -> Html Msg
@@ -134,10 +273,14 @@ view model =
             [ ( "position", "absolute" )
             , ( "left", toString model.layout.left ++ "px" )
             , ( "top", "0px" )
-            , ( "bottom", "0px" )
             , ( "width", toString model.layout.width ++ "px" )
+            , ( "height", "auto" )
             ]
         ]
-        [ viewBoard model
-        , Html.text ((Color.rgb 10 10 10 |> toString) ++ "COLOR")
+        [ viewHeader model
+        , Html.div [ style [("minHeight", "50px")]]
+            [ 
+            viewNewGameButton model.layout, viewTopText model.layout
+            ]
+        , viewBoard model
         ]

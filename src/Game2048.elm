@@ -8,9 +8,9 @@ import Animation exposing (isDone)
 import Time exposing (Time)
 import Window
 import Task
-
-import Game2048.Model as M exposing (Model, Msg(..), Direction(..))
+import Game2048.Model as M exposing (Model, Msg(..), Direction(..), TileData)
 import Game2048.View exposing (view)
+
 
 -- UPDATE
 
@@ -46,7 +46,10 @@ update msg model =
                         ! [ M.addRandomTileOnInitCmd nextModel ]
 
             Move direction ->
-                M.move direction model ! []
+                if M.canMoveTo direction model then
+                    M.move direction model ! []
+                else
+                    model ! []
 
             Collapse ->
                 M.collapse model ! []
@@ -59,34 +62,13 @@ update msg model =
                     nextModel =
                         { model | time = time }
                 in
-                    if isAnimationRunning nextModel then
+                    if M.isAnimating nextModel then
                         nextModel ! []
                     else
                         update model.nextMsg nextModel
 
             NoOp ->
                 model ! []
-
-
-
--- VIEW
-
-
-isAnimationRunning : Model -> Bool
-isAnimationRunning model =
-    let
-        isBoardAnimationRunning_ time tiles =
-            case tiles of
-                [] ->
-                    False
-
-                tile :: tail ->
-                    not (isDone time tile.row)
-                        || not (isDone time tile.col)
-                        || not (isDone time tile.size)
-                        || isBoardAnimationRunning_ time tail
-    in
-        isBoardAnimationRunning_ model.time model.board
 
 
 
@@ -133,11 +115,41 @@ subscriptions model =
 -- MAIN
 
 
+beforeWin =
+    [ TileData 1 1 1024
+    , TileData 1 2 1024
+    , TileData 1 3 512
+    , TileData 1 4 256
+    ]
+
+beforeFail =
+    [ TileData 1 1 1024
+    , TileData 1 2 512
+    , TileData 1 3 256
+    , TileData 1 4 128
+
+    , TileData 2 1 64
+    , TileData 2 2 32
+    , TileData 2 3 16
+    , TileData 2 4 8
+
+    , TileData 3 1 1024
+    , TileData 3 2 512
+    , TileData 3 3 256
+    , TileData 3 4 64
+
+    , TileData 4 1 32
+    , TileData 4 2 64
+    , TileData 4 3 32
+    ]
+
+
 main : Program Never Model Msg
 main =
     Html.program
         { init =
-            M.init []
+            M.init
+                []--beforeFail
                 ! [ Task.perform Resize Window.size
                   , Task.perform Init Time.now
                   ]

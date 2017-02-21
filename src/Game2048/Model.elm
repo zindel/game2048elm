@@ -10,15 +10,28 @@ module Game2048.Model
         , init
         , collapse
         , move
+        , canMove
+        , canMoveTo
         , addTile
         , resize
         , isRunning
+        , isAnimating
         , addRandomTileCmd
         , addRandomTileOnInitCmd
         )
 
 import Game2048.Util exposing (cells)
-import Animation exposing (Animation, getTo, animation, from, to, static, duration)
+import Animation
+    exposing
+        ( Animation
+        , isDone
+        , getTo
+        , animation
+        , from
+        , to
+        , static
+        , duration
+        )
 import Time exposing (Time, second)
 import Window
 import Random
@@ -122,9 +135,9 @@ isBoardReady board =
 sizeAnimation : Float -> Time -> Animation
 sizeAnimation cellWidth time =
     animation time
-        |> from (cellWidth * 0.75)
+        |> from (cellWidth * 0.5)
         |> to cellWidth
-        |> duration (0.1 * second)
+        |> duration (0.07 * second)
 
 
 resizeTile : Float -> Time -> Tile -> Tile
@@ -248,6 +261,20 @@ findTiles ( row, col ) =
         )
 
 
+canMove : Model -> Bool
+canMove model =
+    [ Left, Right, Up, Down ] |> List.any (\d -> canMoveTo d model)
+
+
+canMoveTo : Direction -> Model -> Bool
+canMoveTo direction model =
+    let
+        movedModel =
+            move direction model
+    in
+        isAnimating movedModel
+
+
 collapse : Model -> Model
 collapse model =
     let
@@ -337,3 +364,20 @@ resize { width, height } model =
 isRunning : Model -> Bool
 isRunning model =
     isBoardReady model.board || model.nextMsg /= NoOp
+
+
+isAnimating : Model -> Bool
+isAnimating model =
+    let
+        isBoardAnimationRunning_ time tiles =
+            case tiles of
+                [] ->
+                    False
+
+                tile :: tail ->
+                    not (isDone time tile.row)
+                        || not (isDone time tile.col)
+                        || not (isDone time tile.size)
+                        || isBoardAnimationRunning_ time tail
+    in
+        isBoardAnimationRunning_ model.time model.board
