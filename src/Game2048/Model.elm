@@ -5,6 +5,7 @@ module Game2048.Model
         , Direction(..)
         , TileData
         , Tile
+        , Layout
         , boardSize
         , init
         , collapse

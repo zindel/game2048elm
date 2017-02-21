@@ -59,7 +59,7 @@ update msg model =
                     nextModel =
                         { model | time = time }
                 in
-                    if isAnimationRunning model then
+                    if isAnimationRunning nextModel then
                         nextModel ! []
                     else
                         update model.nextMsg nextModel

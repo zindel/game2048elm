@@ -1,16 +1,16 @@
 module Game2048.View exposing (..)
 
-import Game2048.Model exposing (Model, Msg, Tile, boardSize)
-
+import Game2048.Model exposing (Model, Msg, Tile, Layout, boardSize)
 import Html exposing (Html)
 import Html.Attributes exposing (style)
 import Time exposing (Time)
 import Animation exposing (animate)
+import Color exposing (Color, rgba, rgb)
+import Game2048.Util exposing (cells, colorToCSS)
 
-import Game2048.Util exposing (cells)
 
-toTopLeft : Float -> Float -> Float -> Float -> Float -> ( Float, Float )
-toTopLeft borderWidth cellWidth row col size =
+toTopLeft : Layout -> Float -> Float -> Float -> ( Float, Float )
+toTopLeft { borderWidth, cellWidth } row col size =
     let
         center =
             (cellWidth - size) / 2.0
@@ -20,8 +20,11 @@ toTopLeft borderWidth cellWidth row col size =
         )
 
 
-viewBox : Float -> Float -> Float -> String -> String -> Html Msg
-viewBox left top size color text =
+viewBox : Float -> Float -> Float -> Color -> Color -> String -> Html Msg
+viewBox left top size color textColor text =
+    let
+        fontSize = size / (String.length text |> max 2 |> toFloat)
+    in
     Html.div
         [ style
             [ ( "position", "absolute" )
@@ -30,7 +33,10 @@ viewBox left top size color text =
             , ( "width", toString size ++ "px" )
             , ( "height", toString size ++ "px" )
             , ( "line-height", toString size ++ "px" )
-            , ( "backgroundColor", color )
+            , ( "backgroundColor", colorToCSS color )
+            , ( "color", colorToCSS textColor )
+            , ( "fontWeight", "bold" )
+            , ( "fontSize", toString fontSize  ++ "px")
             , ( "textAlign", "center" )
             , ( "verticalAlign", "middle" )
             ]
@@ -38,49 +44,85 @@ viewBox left top size color text =
         [ Html.text text ]
 
 
-viewCell : Float -> Float -> ( Int, Int ) -> Html Msg
-viewCell borderWidth cellWidth ( row, col ) =
+viewCell : Layout -> ( Int, Int ) -> Html Msg
+viewCell layout ( row, col ) =
     let
         ( top, left ) =
-            toTopLeft borderWidth cellWidth (toFloat row) (toFloat col) cellWidth
+            toTopLeft layout (toFloat row) (toFloat col) layout.cellWidth
     in
-        viewBox left top cellWidth "gray" ""
+        viewBox left top layout.cellWidth (rgba 238 228 218 0.35) Color.black ""
 
 
-viewCells : Float -> Float -> List (Html Msg)
-viewCells borderWidth cellWidth =
-    cells boardSize |> List.map (viewCell borderWidth cellWidth)
+viewCells : Layout -> List (Html Msg)
+viewCells layout =
+    cells boardSize |> List.map (viewCell layout)
 
 
-viewTile : Float -> Float -> Time -> Tile -> Html Msg
-viewTile borderWidth cellWidth time tile =
+tileBackgroundColor : Int -> Color
+tileBackgroundColor value =
     let
-        size =
-            animate time tile.size
+        color =
+            [ rgb 238 228 218
+            , rgb 237 224 200
+            , rgb 242 177 121
+            , rgb 245 149 99
+            , rgb 246 124 95
+            , rgb 246 94 59
+            , rgb 237 207 114
+            , rgb 237 204 97
+            , rgb 237 200 80
+            , rgb 237 197 63
+            , rgb 237 194 46
+            ]
+
+        drop =
+            logBase 2 (toFloat value) - 1 |> floor
+    in
+        color
+            |> List.drop drop
+            |> List.head
+            |> Maybe.withDefault Color.black
+
+
+tileTextColor : Int -> Color
+tileTextColor value =
+    if value < 8 then
+        rgb 119 110 101
+    else
+        rgb 249 246 242
+
+
+viewTile : Layout -> Time -> Tile -> Html Msg
+viewTile layout time tile =
+    let
+        getValue =
+            animate time
 
         ( top, left ) =
-            toTopLeft borderWidth cellWidth (animate time tile.row) (animate time tile.col) size
+            toTopLeft layout
+                (getValue tile.row)
+                (getValue tile.col)
+                (getValue tile.size)
     in
-        viewBox left top size "blue" (toString tile.value)
+        viewBox left top (getValue tile.size) (tileBackgroundColor tile.value) (tileTextColor tile.value) (toString tile.value)
 
 
 viewBoard : Model -> Html Msg
-viewBoard model =
+viewBoard { layout, time, board } =
     let
-        {width, borderWidth, cellWidth} = model.layout
         viewTiles =
-            List.map (viewTile borderWidth cellWidth model.time) model.board
+            List.map (viewTile layout time) board
     in
-        viewCells borderWidth cellWidth
+        viewCells layout
             ++ viewTiles
             |> Html.div
                 [ style
                     [ ( "position", "absolute" )
                     , ( "left", "0px" )
                     , ( "top", "0px" )
-                    , ( "width", toString width ++ "px" )
-                    , ( "height", toString width ++ "px" )
-                    , ( "backgroundColor", "green" )
+                    , ( "width", toString layout.width ++ "px" )
+                    , ( "height", toString layout.width ++ "px" )
+                    , ( "backgroundColor", "#bbada0" )
                     ]
                 ]
 
@@ -94,9 +136,8 @@ view model =
             , ( "top", "0px" )
             , ( "bottom", "0px" )
             , ( "width", toString model.layout.width ++ "px" )
-            , ( "backgroundColor", "yellow" )
             ]
         ]
         [ viewBoard model
-        , Html.text (List.length model.board |> toString)
+        , Html.text ((Color.rgb 10 10 10 |> toString) ++ "COLOR")
         ]
