@@ -2,7 +2,40 @@
 <html>
 <head>
   <title>2048 Game in Elm</title>
+  <style type="text/css">
+    @import url(https://gabrielecirulli.github.io/2048/style/fonts/clear-sans.css);
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      position: relative;
+      height: 100%;
+      width: 100%;
+    }
+
+    body {
+      background: #faf8ef;
+      font-family: "Clear Sans", "Helvetica Neue", Arial, sans-serif;
+    }
+
+    #game, #text {
+      position: relative;
+      margin: auto;
+      width: 40%;
+      height: auto;
+      min-width: 300px;
+    }
+
+    #text {
+      margin-top: 15px;
+    }
+
+  </style>
 </head>
 <body>
+  <div id="game">itest</div>
+  <div id="text">Hello, world</div>
+
+  <script type="text/javascript" src="build/elm.js"></script>
 </body>
 </html>
