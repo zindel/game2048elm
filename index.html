@@ -85,6 +85,13 @@
       }
     }
 
+    var container = document.getElementById('game');
+    var app = Elm.Game2048.embed(container, init(container));
+    app.ports.save.subscribe(save);
+
+    window.onresize = function() {
+      app.ports.size.send(size(container));
+    };
   </script>
 </body>
 </html>
