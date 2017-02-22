@@ -50,8 +50,7 @@ update msg model =
                     nextModel =
                         M.addTile model tileData
                 in
-                    { nextModel | nextMsg = NoOp }
-                        ! [ M.addRandomTileOnInitCmd nextModel ]
+                    nextModel ! [ M.addRandomTileOnInitCmd nextModel ]
 
             Move direction ->
                 if M.canMoveTo direction model then
@@ -165,8 +164,8 @@ main =
     Html.program
         { init =
             M.init 0
-                -- []
-                beforeWin
+                []
+                -- beforeFail
                 ! [ initCmd ]
         , subscriptions = subscriptions
         , update = update

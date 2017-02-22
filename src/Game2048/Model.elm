@@ -136,8 +136,17 @@ addTile model { row, col, value } =
                 (toFloat col |> static)
                 (sizeAnimation model.layout.cellWidth model.time)
                 value
+
+        nextModel =
+            { model | board = model.board ++ [ tile ] }
     in
-        { model | board = model.board ++ [ tile ] }
+        { nextModel
+            | nextMsg =
+                if Debug.log "canMove" (canMove nextModel) then
+                    NoOp
+                else
+                    ShowPopup GameOver
+        }
 
 
 init : Int -> List TileData -> Model
@@ -325,10 +334,14 @@ canMove model =
 canMoveTo : Direction -> Model -> Bool
 canMoveTo direction model =
     let
+        positions =
+            List.map (\{ row, col, value } -> ( getTo row, getTo col, value ))
+                >> List.sort
+
         movedModel =
             move direction model
     in
-        isAnimating movedModel
+        positions model.board /= positions movedModel.board
 
 
 collapse : Model -> Model
@@ -489,12 +502,12 @@ resize { width, height } model =
 
 
 isRunning : Model -> Bool
-isRunning {board, popup, nextMsg} =
+isRunning { board, popup, nextMsg } =
     isBoardReady board || nextMsg /= NoOp
 
 
 isAnimating : Model -> Bool
-isAnimating {popup, time, board} =
+isAnimating { popup, time, board } =
     let
         isBoardAnimationRunning_ tiles =
             case tiles of
@@ -507,4 +520,4 @@ isAnimating {popup, time, board} =
                         || not (isDone time tile.size)
                         || isBoardAnimationRunning_ tail
     in
-        popup ==Nothing && isBoardAnimationRunning_ board
+        popup == Nothing && isBoardAnimationRunning_ board
