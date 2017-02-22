@@ -15,6 +15,14 @@ import Game2048.View exposing (view)
 -- UPDATE
 
 
+initCmd : Cmd Msg
+initCmd =
+    Cmd.batch
+        [ Task.perform Resize Window.size
+        , Task.perform Init Time.now
+        ]
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     let
@@ -57,10 +65,20 @@ update msg model =
             AddRandomTile ->
                 model ! [ M.addRandomTileCmd model ]
 
+            ShowPopup popupType ->
+                M.createPopup (Debug.log "PT" popupType) model ! []
+
+            NewGame ->
+                M.init model.best [] ! [ initCmd ]
+
+            Continue ->
+                { model | freePlay = True, popup = Nothing }
+                    ! [ M.addRandomTileCmd model ]
+
             Tick time ->
                 let
                     nextModel =
-                        { model | time = time }
+                        M.clearScoreUpdate { model | time = time }
                 in
                     if M.isAnimating nextModel then
                         nextModel ! []
@@ -122,22 +140,20 @@ beforeWin =
     , TileData 1 4 256
     ]
 
+
 beforeFail =
     [ TileData 1 1 1024
     , TileData 1 2 512
     , TileData 1 3 256
     , TileData 1 4 128
-
     , TileData 2 1 64
     , TileData 2 2 32
     , TileData 2 3 16
     , TileData 2 4 8
-
     , TileData 3 1 1024
     , TileData 3 2 512
     , TileData 3 3 256
     , TileData 3 4 64
-
     , TileData 4 1 32
     , TileData 4 2 64
     , TileData 4 3 32
@@ -148,11 +164,10 @@ main : Program Never Model Msg
 main =
     Html.program
         { init =
-            M.init
-                []--beforeFail
-                ! [ Task.perform Resize Window.size
-                  , Task.perform Init Time.now
-                  ]
+            M.init 0
+                -- []
+                beforeWin
+                ! [ initCmd ]
         , subscriptions = subscriptions
         , update = update
         , view = view

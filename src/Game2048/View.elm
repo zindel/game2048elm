@@ -1,8 +1,19 @@
 module Game2048.View exposing (..)
 
-import Game2048.Model exposing (Model, Msg, Tile, Layout, ScoreUpdate, boardSize)
+import Game2048.Model
+    exposing
+        ( Model
+        , Msg(..)
+        , Tile
+        , Layout
+        , ScoreUpdate
+        , Popup
+        , PopupType(..)
+        , boardSize
+        )
 import Html exposing (Html)
 import Html.Attributes exposing (style, src)
+import Html.Events  exposing (onClick)
 import Time exposing (Time)
 import Animation exposing (animate)
 import Color exposing (Color, rgba, rgb)
@@ -112,14 +123,76 @@ viewTile layout time tile =
         viewBox left top (getValue tile.size) (tileBackgroundColor tile.value) (tileTextColor tile.value) (toString tile.value)
 
 
+viewPopup : Time -> Layout -> Popup -> Html Msg
+viewPopup time { cellWidth, width } { popupType, opacity } =
+    let
+        buttonStyle =
+            [ ( "marginLeft", "5px" ) ]
+
+        ( message, buttons ) =
+            case popupType of
+                Victory ->
+                    ( "You won!"
+                    , [ button cellWidth buttonStyle "Continue Playing" Continue
+                      , button cellWidth buttonStyle "New Game" NewGame
+                      ]
+                    )
+
+                GameOver ->
+                    ( "Game Over."
+                    , [ button cellWidth buttonStyle "Try Again" NewGame
+                      ]
+                    )
+
+        color =
+            animate time opacity |> rgba 255 255 255 |> colorToCSS
+
+        fontSize =
+            cellWidth / 2
+
+        messageDiv =
+            Html.div
+                [ style
+                    [ ( "fontSize", toString fontSize ++ "px" )
+                    , ( "fontWeight", "bold" )
+                    , ( "textAlign", "center" )
+                    , ( "marginTop", toString cellWidth ++ "px" )
+                    , ( "color", "#776e65" )
+                    ]
+                ]
+                [ Html.text message ]
+
+        buttonDiv =
+            Html.div [ style [ ( "textAlign", "center" ) ] ]
+    in
+        Html.div
+            [ style
+                [ ( "position", "absolute" )
+                , ( "backgroundColor", color )
+                , ( "width", toString width ++ "px" )
+                , ( "height", toString width ++ "px" )
+                ]
+            ]
+            [ messageDiv, buttons |> buttonDiv ]
+
+
 viewBoard : Model -> Html Msg
-viewBoard { layout, time, board } =
+viewBoard { popup, layout, time, board } =
     let
         viewTiles =
             List.map (viewTile layout time) board
+
+        viewPopup_ =
+            case popup of
+                Nothing ->
+                    []
+
+                Just popup_ ->
+                    [ viewPopup time layout popup_ ]
     in
         viewCells layout
             ++ viewTiles
+            ++ viewPopup_
             |> Html.div
                 [ style
                     [ ( "position", "relative" )
@@ -229,8 +302,11 @@ viewScoreBox { cellWidth } title value scoreUpdates =
 viewScoreUpdate : Time -> ScoreUpdate -> Html Msg
 viewScoreUpdate time { value, index, animation } =
     let
-        left = 10 + index * 10
-        top = (animate time animation) * 20
+        left =
+            10 + index * 10
+
+        top =
+            (animate time animation) * 20
     in
         Html.div
             [ style
@@ -238,6 +314,7 @@ viewScoreUpdate time { value, index, animation } =
                 , ( "display", "inline-block" )
                 , ( "width", "auto" )
                 , ( "height", "auto" )
+                , ( "color", colorToCSS (rgba 143 122 102 0.7) )
                 , ( "top", toString top ++ "px" )
                 , ( "left", toString left ++ "px" )
                 ]
@@ -250,7 +327,7 @@ viewScore model =
     let
         scoreUpdates =
             model.scoreUpdates
-            |> List.map (viewScoreUpdate model.time)
+                |> List.map (viewScoreUpdate model.time)
     in
         Html.div
             [ style
@@ -266,27 +343,29 @@ viewScore model =
             ]
 
 
-viewNewGameButton : Layout -> Html Msg
-viewNewGameButton { cellWidth } =
+button : Float -> List ( String, String ) -> String -> Msg -> Html Msg
+button cellWidth styles text msg =
     let
         fontSize =
             cellWidth / 5
     in
         Html.button
             [ style
-                [ ( "float", "right" )
-                , ( "padding", "11px" )
-                , ( "color", "#f9f6f2" )
-                , ( "backgroundColor", "#8f7a66" )
-                , ( "borderRadius", "3px" )
-                , ( "fontWeight", "bold" )
-                , ( "border", "none" )
-                , ( "cursor", "pointer" )
-                , ( "fontSize", toString fontSize ++ "px" )
-                , ( "lineHeight", toString fontSize ++ "px" )
-                ]
+                ([ ( "padding", "11px" )
+                 , ( "color", "#f9f6f2" )
+                 , ( "backgroundColor", "#8f7a66" )
+                 , ( "borderRadius", "3px" )
+                 , ( "fontWeight", "bold" )
+                 , ( "border", "none" )
+                 , ( "cursor", "pointer" )
+                 , ( "fontSize", toString fontSize ++ "px" )
+                 , ( "lineHeight", toString fontSize ++ "px" )
+                 ]
+                    ++ styles
+                )
+            , onClick msg    
             ]
-            [ Html.text "New Game" ]
+            [ Html.text text ]
 
 
 viewHeader : Model -> Html Msg
@@ -303,6 +382,18 @@ viewHeader model =
         ]
 
 
+viewHeader2 : Model -> Html Msg
+viewHeader2 model =
+    Html.div [ style [ ( "minHeight", "50px" ) ] ]
+        [ button
+            model.layout.cellWidth
+            [ ( "float", "right" ) ]
+            "New Game"
+            NewGame
+        , viewTopText model.layout
+        ]
+
+
 view : Model -> Html Msg
 view model =
     Html.div
@@ -316,9 +407,6 @@ view model =
             ]
         ]
         [ viewHeader model
-        , Html.div [ style [ ( "minHeight", "50px" ) ] ]
-            [ viewNewGameButton model.layout
-            , viewTopText model.layout
-            ]
+        , viewHeader2 model
         , viewBoard model
         ]

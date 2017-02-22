@@ -7,6 +7,8 @@ module Game2048.Model
         , Tile
         , Layout
         , ScoreUpdate
+        , PopupType(..)
+        , Popup
         , boardSize
         , init
         , collapse
@@ -19,6 +21,8 @@ module Game2048.Model
         , isAnimating
         , addRandomTileCmd
         , addRandomTileOnInitCmd
+        , createPopup
+        , clearScoreUpdate
         )
 
 import Game2048.Util exposing (cells)
@@ -71,6 +75,9 @@ type Msg
     | Collapse
     | AddRandomTile
     | AddTile TileData
+    | ShowPopup PopupType
+    | NewGame
+    | Continue
     | Tick Time
     | NoOp
 
@@ -93,12 +100,25 @@ type alias ScoreUpdate =
 type alias Model =
     { initialBoard : List TileData
     , board : Board
+    , freePlay : Bool
     , score : Int
     , scoreUpdates : List ScoreUpdate
     , best : Int
     , time : Time
     , nextMsg : Msg
     , layout : Layout
+    , popup : Maybe Popup
+    }
+
+
+type PopupType
+    = Victory
+    | GameOver
+
+
+type alias Popup =
+    { popupType : PopupType
+    , opacity : Animation
     }
 
 
@@ -120,16 +140,18 @@ addTile model { row, col, value } =
         { model | board = model.board ++ [ tile ] }
 
 
-init : List TileData -> Model
-init initialBoard =
+init : Int -> List TileData -> Model
+init best initialBoard =
     { initialBoard = initialBoard
     , board = []
+    , freePlay = False
     , score = 0
     , scoreUpdates = []
-    , best = 0
+    , best = best
     , time = 0
     , nextMsg = NoOp
     , layout = Layout 0 0 0 0
+    , popup = Nothing
     }
 
 
@@ -144,6 +166,21 @@ isBoardReady board =
 
         _ ->
             True
+
+
+createPopup : PopupType -> Model -> Model
+createPopup popupType model =
+    { model
+        | nextMsg = NoOp
+        , popup =
+            Just
+                (animation model.time
+                    |> from 0
+                    |> to 0.6
+                    |> duration (0.8 * second)
+                    |> Popup popupType
+                )
+    }
 
 
 sizeAnimation : Float -> Time -> Animation
@@ -326,26 +363,59 @@ collapse model =
 
         scoreSum =
             (List.sum scores)
+    in
+        updateScore (List.sum scores)
+            { model
+                | board = nextBoard
+                , nextMsg =
+                    if hasWinningTile nextBoard && not model.freePlay then
+                        ShowPopup Victory
+                    else
+                        AddRandomTile
+            }
 
+
+updateScore : Int -> Model -> Model
+updateScore scoreSum model =
+    let
         nextScore =
             model.score + scoreSum
+
+        scoreUpdates =
+            if scoreSum > 0 then
+                [ ScoreUpdate scoreSum
+                    (List.length model.scoreUpdates)
+                    (scoreAnimation model.time)
+                ]
+            else
+                []
     in
         { model
-            | board = nextBoard
-            , score = nextScore
-            , scoreUpdates =
-                model.scoreUpdates
-                    ++ [ ScoreUpdate scoreSum
-                            (List.length model.scoreUpdates)
-                            (scoreAnimation model.time)
-                       ]
+            | score = nextScore
+            , scoreUpdates = model.scoreUpdates ++ scoreUpdates
             , best =
                 if nextScore > model.best then
                     nextScore
                 else
                     model.best
-            , nextMsg = AddRandomTile
         }
+
+
+clearScoreUpdate : Model -> Model
+clearScoreUpdate model =
+    { model
+        | scoreUpdates =
+            List.filter
+                (\{ animation } ->
+                    not (isDone model.time animation)
+                )
+                model.scoreUpdates
+    }
+
+
+hasWinningTile : Board -> Bool
+hasWinningTile board =
+    List.any (\t -> t.value == 2048) board
 
 
 emptyCells : Board -> List ( Int, Int )
@@ -419,14 +489,14 @@ resize { width, height } model =
 
 
 isRunning : Model -> Bool
-isRunning model =
-    isBoardReady model.board || model.nextMsg /= NoOp
+isRunning {board, popup, nextMsg} =
+    isBoardReady board || nextMsg /= NoOp
 
 
 isAnimating : Model -> Bool
-isAnimating model =
+isAnimating {popup, time, board} =
     let
-        isBoardAnimationRunning_ time tiles =
+        isBoardAnimationRunning_ tiles =
             case tiles of
                 [] ->
                     False
@@ -435,6 +505,6 @@ isAnimating model =
                     not (isDone time tile.row)
                         || not (isDone time tile.col)
                         || not (isDone time tile.size)
-                        || isBoardAnimationRunning_ time tail
+                        || isBoardAnimationRunning_ tail
     in
-        isBoardAnimationRunning_ model.time model.board
+        popup ==Nothing && isBoardAnimationRunning_ board
