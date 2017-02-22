@@ -1,0 +1,7 @@
+node_modules
+.DS_STORE
+npm-debug.log
+elm-stuff
+tags
+build
+gh-pages
