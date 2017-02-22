@@ -4,9 +4,16 @@ import Html exposing (Html)
 import Keyboard
 import Debug
 import AnimationFrame
-import Game2048.Model as M exposing (Model, Msg(..), Direction(..), TileData)
+import Game2048.Model as M
+    exposing
+        ( Model
+        , Msg(..)
+        , Direction(..)
+        , TileData
+        , Size
+        )
 import Game2048.View exposing (view)
-import Game2048.Ports exposing (size)
+import Game2048.Ports exposing (size, save)
 
 
 -- UPDATE
@@ -39,7 +46,10 @@ update msg model =
                     nextModel =
                         M.addTile model tileData
                 in
-                    nextModel ! [ M.addRandomTileOnInitCmd nextModel ]
+                    nextModel
+                        ! [ M.addRandomTileOnInitCmd nextModel
+                          , save (M.saveData nextModel)
+                          ]
 
             Move direction ->
                 if M.canMoveTo direction model then
@@ -57,7 +67,7 @@ update msg model =
                 M.createPopup (Debug.log "PT" popupType) model ! []
 
             NewGame ->
-                init model.best model.size []
+                init 0 model.best model.size []
 
             Continue ->
                 { model | freePlay = True, popup = Nothing }
@@ -114,7 +124,7 @@ subscriptions model =
                 Sub.none
     in
         Sub.batch
-            [ running, size Resize]
+            [ running, size Resize ]
 
 
 beforeWin =
@@ -144,19 +154,30 @@ beforeFail =
     ]
 
 
-init : Int -> M.Size -> List TileData -> ( Model, Cmd Msg )
-init best size initialBoard =
+init : Int -> Int -> M.Size -> List TileData -> ( Model, Cmd Msg )
+init score best size initialBoard =
     let
         model =
-            M.init best size initialBoard
+            M.init score best size initialBoard
     in
         model ! [ M.initCmd model ]
 
 
-main : Program M.Size Model Msg
+type alias Flags =
+    { score : Int
+    , best : Int
+    , size : Size
+    , initialBoard : List TileData
+    }
+
+
+main : Program Flags Model Msg
 main =
     Html.programWithFlags
-        { init = \size -> init 0 size []
+        { init =
+            (\{ score, best, size, initialBoard } ->
+                init score best size initialBoard
+            )
         , subscriptions = subscriptions
         , update = update
         , view = view

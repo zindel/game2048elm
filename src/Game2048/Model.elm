@@ -21,6 +21,7 @@ module Game2048.Model
         , isRunning
         , isAnimating
         , initCmd
+        , saveData
         , addRandomTileCmd
         , addRandomTileOnInitCmd
         , createPopup
@@ -154,19 +155,19 @@ addTile model { row, col, value } =
     in
         { nextModel
             | nextMsg =
-                if Debug.log "canMove" (canMove nextModel) then
+                if canMove nextModel then
                     NoOp
                 else
                     ShowPopup GameOver
         }
 
 
-init : Int -> Size -> List TileData -> Model
-init best size initialBoard =
+init : Int -> Int -> Size -> List TileData -> Model
+init score best size initialBoard =
     { initialBoard = initialBoard
     , board = []
     , freePlay = False
-    , score = 0
+    , score = score
     , scoreUpdates = []
     , best = best
     , time = 0
@@ -501,7 +502,7 @@ resize model =
                 |> max 300.0
 
         padding =
-            (Debug.log "W" width - Debug.log "gw" gameWidth) / 2
+            (width - gameWidth) / 2
 
         borderWidth =
             gameWidth * 0.1 / (boardSize + 1)
@@ -548,3 +549,15 @@ initCmd model =
         [ Task.perform Resize (Task.succeed model.size)
         , Task.perform Init Time.now
         ]
+
+
+saveData : Model -> ( Int, Int, List TileData )
+saveData { score, best, board } =
+    ( score
+    , best
+    , List.map
+        (\{ row, col, value } ->
+            TileData (getTo row |> floor) (getTo col |> floor) value
+        )
+        board
+    )

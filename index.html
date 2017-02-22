@@ -38,6 +38,16 @@
 
   <script type="text/javascript" src="build/elm.js"> </script>
   <script type="text/javascript">
+    // Make sure page is not scrolling on keypress and keydown
+    document.addEventListener('keydown', 
+        function preventScroll(e) {
+          if(e.which == 38 || e.which == 40) {
+            e.preventDefault();
+            return false;
+          }
+          return true;
+        });
+
     function size(el) {
       var rect = el.getBoundingClientRect();
       return {
@@ -48,8 +58,36 @@
       };
     }
 
+    var KEY = "game2048elm";
+
+    function init(container) {
+      var ret = {
+        score: 0,
+        best: 0,
+        initialBoard: [],
+        size: size(container) 
+      };
+      if (window.localStorage) {
+        try {
+          var obj = JSON.parse(localStorage.getItem(KEY));
+          ret.score = obj[0];
+          ret.best = obj[1];
+          ret.initialBoard = obj[2];
+        } catch (e) {}
+      }
+
+      return ret;
+    }
+
+    function save(data) {
+      if (window.localStorage) {
+        localStorage.setItem(KEY, JSON.stringify(data));
+      }
+    }
+
     var container = document.getElementById('game');
-    var app = Elm.Game2048.embed(container, size(container));
+    var app = Elm.Game2048.embed(container, init(container));
+    app.ports.save.subscribe(save);
 
     window.onresize = function() {
       app.ports.size.send(size(container));
