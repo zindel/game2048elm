@@ -398,10 +398,11 @@ view : Model -> Html Msg
 view model =
     Html.div
         [ style
-            [ ( "position", "absolute" )
-            , ( "left", toString model.layout.left ++ "px" )
-            , ( "top", "0px" )
+            [ ( "position", "relative" )
+            -- , ( "left", toString model.layout.left ++ "px" )
+            -- , ( "top", "0px" )
             , ( "paddingTop", "20px" )
+            , ( "marginLeft", toString model.layout.padding ++ "px" )
             , ( "width", toString model.layout.width ++ "px" )
             , ( "height", "auto" )
             ]

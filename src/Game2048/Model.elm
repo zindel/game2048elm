@@ -9,6 +9,7 @@ module Game2048.Model
         , ScoreUpdate
         , PopupType(..)
         , Popup
+        , Size
         , boardSize
         , init
         , collapse
@@ -19,6 +20,7 @@ module Game2048.Model
         , resize
         , isRunning
         , isAnimating
+        , initCmd
         , addRandomTileCmd
         , addRandomTileOnInitCmd
         , createPopup
@@ -38,8 +40,8 @@ import Animation
         , duration
         )
 import Time exposing (Time, second)
-import Window
 import Random
+import Task
 
 
 type Direction
@@ -68,9 +70,17 @@ type alias Board =
     List Tile
 
 
+type alias Size =
+    { width : Float
+    , height : Float
+    , windowWidth : Float
+    , windowHeight : Float
+    }
+
+
 type Msg
     = Init Time
-    | Resize Window.Size
+    | Resize Size
     | Move Direction
     | Collapse
     | AddRandomTile
@@ -87,6 +97,7 @@ type alias Layout =
     , left : Float
     , cellWidth : Float
     , borderWidth : Float
+    , padding : Float
     }
 
 
@@ -107,6 +118,7 @@ type alias Model =
     , time : Time
     , nextMsg : Msg
     , layout : Layout
+    , size : Size
     , popup : Maybe Popup
     }
 
@@ -149,8 +161,8 @@ addTile model { row, col, value } =
         }
 
 
-init : Int -> List TileData -> Model
-init best initialBoard =
+init : Int -> Size -> List TileData -> Model
+init best size initialBoard =
     { initialBoard = initialBoard
     , board = []
     , freePlay = False
@@ -159,7 +171,8 @@ init best initialBoard =
     , best = best
     , time = 0
     , nextMsg = NoOp
-    , layout = Layout 0 0 0 0
+    , layout = Layout 0 0 0 0 0
+    , size = size
     , popup = Nothing
     }
 
@@ -475,26 +488,32 @@ addRandomTileOnInitCmd model =
         addRandomTileCmd model
 
 
-resize : Window.Size -> Model -> Model
-resize { width, height } model =
+resize : Model -> Model
+resize model =
     let
+        { width, windowHeight } =
+            model.size
+
         gameWidth =
-            toFloat height
+            windowHeight
                 * 0.7
-                |> min (toFloat width * 0.6)
+                |> min width
                 |> max 300.0
+
+        padding =
+            (Debug.log "W" width - Debug.log "gw" gameWidth) / 2
 
         borderWidth =
             gameWidth * 0.1 / (boardSize + 1)
 
         gameLeft =
-            toFloat width / 2.0 - gameWidth / 2 |> max 0
+            width / 2.0 - gameWidth / 2 |> max 0
 
         cellWidth =
             (gameWidth - borderWidth * (boardSize + 1)) / boardSize
     in
         { model
-            | layout = Layout gameWidth gameLeft cellWidth borderWidth
+            | layout = Layout gameWidth gameLeft cellWidth borderWidth padding
             , board =
                 model.board
                     |> List.map (resizeTile cellWidth model.time)
@@ -521,3 +540,11 @@ isAnimating { popup, time, board } =
                         || isBoardAnimationRunning_ tail
     in
         popup == Nothing && isBoardAnimationRunning_ board
+
+
+initCmd : Model -> Cmd Msg
+initCmd model =
+    Cmd.batch
+        [ Task.perform Resize (Task.succeed model.size)
+        , Task.perform Init Time.now
+        ]

@@ -4,23 +4,12 @@ import Html exposing (Html)
 import Keyboard
 import Debug
 import AnimationFrame
-import Animation exposing (isDone)
-import Time exposing (Time)
-import Window
-import Task
 import Game2048.Model as M exposing (Model, Msg(..), Direction(..), TileData)
 import Game2048.View exposing (view)
+import Game2048.Ports exposing (size)
 
 
 -- UPDATE
-
-
-initCmd : Cmd Msg
-initCmd =
-    Cmd.batch
-        [ Task.perform Resize Window.size
-        , Task.perform Init Time.now
-        ]
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -43,7 +32,7 @@ update msg model =
                     nextModel ! [ M.addRandomTileOnInitCmd nextModel ]
 
             Resize size ->
-                M.resize size model ! []
+                M.resize { model | size = size } ! []
 
             AddTile tileData ->
                 let
@@ -68,7 +57,7 @@ update msg model =
                 M.createPopup (Debug.log "PT" popupType) model ! []
 
             NewGame ->
-                M.init model.best [] ! [ initCmd ]
+                init model.best model.size []
 
             Continue ->
                 { model | freePlay = True, popup = Nothing }
@@ -125,11 +114,7 @@ subscriptions model =
                 Sub.none
     in
         Sub.batch
-            [ running, Window.resizes Resize ]
-
-
-
--- MAIN
+            [ running, size Resize]
 
 
 beforeWin =
@@ -159,14 +144,19 @@ beforeFail =
     ]
 
 
-main : Program Never Model Msg
+init : Int -> M.Size -> List TileData -> ( Model, Cmd Msg )
+init best size initialBoard =
+    let
+        model =
+            M.init best size initialBoard
+    in
+        model ! [ M.initCmd model ]
+
+
+main : Program M.Size Model Msg
 main =
-    Html.program
-        { init =
-            M.init 0
-                []
-                -- beforeFail
-                ! [ initCmd ]
+    Html.programWithFlags
+        { init = \size -> init 0 size []
         , subscriptions = subscriptions
         , update = update
         , view = view

@@ -18,12 +18,42 @@
       font-family: "Clear Sans", "Helvetica Neue", Arial, sans-serif;
     }
 
+    #game, #text {
+      position: relative;
+      margin: auto;
+      width: 40%;
+      height: auto;
+      min-width: 300px;
+    }
+
+    #text {
+      margin-top: 15px;
+    }
+
   </style>
 </head>
 <body>
+  <div id="game">itest</div>
+  <div id="text">Hello, world</div>
+
   <script type="text/javascript" src="build/elm.js"> </script>
   <script type="text/javascript">
-    Elm.Game2048.fullscreen();
+    function size(el) {
+      var rect = el.getBoundingClientRect();
+      return {
+        width: rect.width, 
+        height: rect.height,
+        windowWidth: window.innerWidth,
+        windowHeight: window.innerHeight
+      };
+    }
+
+    var container = document.getElementById('game');
+    var app = Elm.Game2048.embed(container, size(container));
+
+    window.onresize = function() {
+      app.ports.size.send(size(container));
+    };
   </script>
 </body>
 </html>
