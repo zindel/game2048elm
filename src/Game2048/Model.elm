@@ -17,6 +17,7 @@ module Game2048.Model
         , canMove
         , canMoveTo
         , addTile
+        , addTiles
         , resize
         , isRunning
         , isAnimating
@@ -80,7 +81,7 @@ type alias Size =
 
 
 type Msg
-    = Init Time
+    = Init ( Time, List TileData )
     | Resize Size
     | Move Direction
     | Collapse
@@ -110,8 +111,7 @@ type alias ScoreUpdate =
 
 
 type alias Model =
-    { initialBoard : List TileData
-    , board : Board
+    { board : Board
     , freePlay : Bool
     , score : Int
     , scoreUpdates : List ScoreUpdate
@@ -119,7 +119,6 @@ type alias Model =
     , time : Time
     , nextMsg : Msg
     , layout : Layout
-    , size : Size
     , popup : Maybe Popup
     }
 
@@ -162,10 +161,9 @@ addTile model { row, col, value } =
         }
 
 
-init : Int -> Int -> Size -> List TileData -> Model
-init score best size initialBoard =
-    { initialBoard = initialBoard
-    , board = []
+init : Int -> Int -> Model
+init score best =
+    { board = []
     , freePlay = False
     , score = score
     , scoreUpdates = []
@@ -173,7 +171,6 @@ init score best size initialBoard =
     , time = 0
     , nextMsg = NoOp
     , layout = Layout 0 0 0 0 0
-    , size = size
     , popup = Nothing
     }
 
@@ -489,12 +486,9 @@ addRandomTileOnInitCmd model =
         addRandomTileCmd model
 
 
-resize : Model -> Model
-resize model =
+resize : Size -> Model -> Model
+resize { width, windowHeight } model =
     let
-        { width, windowHeight } =
-            model.size
-
         gameWidth =
             windowHeight
                 * 0.7
@@ -543,12 +537,13 @@ isAnimating { popup, time, board } =
         popup == Nothing && isBoardAnimationRunning_ board
 
 
-initCmd : Model -> Cmd Msg
-initCmd model =
-    Cmd.batch
-        [ Task.perform Resize (Task.succeed model.size)
-        , Task.perform Init Time.now
-        ]
+initCmd : Model -> List TileData -> Cmd Msg
+initCmd model initialBoard =
+    Task.map2
+        (\time initialBoard -> ( time, initialBoard ))
+        Time.now
+        (Task.succeed initialBoard)
+        |> Task.perform Init
 
 
 saveData : Model -> ( Int, Int, List TileData )
@@ -561,3 +556,13 @@ saveData { score, best, board } =
         )
         board
     )
+
+
+addTiles : List TileData -> Model -> Model
+addTiles tiles model =
+    case tiles of
+        [] ->
+            model
+
+        tileData :: tail ->
+            addTile model tileData |> addTiles tail

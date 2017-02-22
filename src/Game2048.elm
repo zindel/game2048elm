@@ -21,70 +21,61 @@ import Game2048.Ports exposing (size, save)
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    let
-        initModel initialBoard model =
-            case initialBoard of
-                [] ->
-                    model
+    case msg of
+        Init ( time, initialBoard ) ->
+            let
+                nextModel =
+                    M.addTiles initialBoard ({ model | time = time })
+            in
+                nextModel ! [ M.addRandomTileOnInitCmd nextModel ]
 
-                tileData :: tail ->
-                    M.addTile model tileData |> initModel tail
-    in
-        case msg of
-            Init time ->
-                let
-                    nextModel =
-                        initModel model.initialBoard ({ model | time = time })
-                in
-                    nextModel ! [ M.addRandomTileOnInitCmd nextModel ]
+        Resize size ->
+            M.resize size model ! []
 
-            Resize size ->
-                M.resize { model | size = size } ! []
+        AddTile tileData ->
+            let
+                nextModel =
+                    M.addTile model tileData
+            in
+                nextModel
+                    ! [ M.addRandomTileOnInitCmd nextModel
+                      , save (M.saveData nextModel)
+                      ]
 
-            AddTile tileData ->
-                let
-                    nextModel =
-                        M.addTile model tileData
-                in
-                    nextModel
-                        ! [ M.addRandomTileOnInitCmd nextModel
-                          , save (M.saveData nextModel)
-                          ]
-
-            Move direction ->
-                if M.canMoveTo direction model then
-                    M.move direction model ! []
-                else
-                    model ! []
-
-            Collapse ->
-                M.collapse model ! []
-
-            AddRandomTile ->
-                model ! [ M.addRandomTileCmd model ]
-
-            ShowPopup popupType ->
-                M.createPopup (Debug.log "PT" popupType) model ! []
-
-            NewGame ->
-                init 0 model.best model.size []
-
-            Continue ->
-                { model | freePlay = True, popup = Nothing }
-                    ! [ M.addRandomTileCmd model ]
-
-            Tick time ->
-                let
-                    nextModel =
-                        M.clearScoreUpdate { model | time = time }
-                in
-                    if M.isAnimating nextModel then
-                        nextModel ! []
-                    else
-                        update model.nextMsg nextModel
-
-            NoOp ->
+        Move direction ->
+            if M.canMoveTo direction model then
+                M.move direction model ! []
+            else
                 model ! []
+
+        Collapse ->
+            M.collapse model ! []
+
+        AddRandomTile ->
+            model ! [ M.addRandomTileCmd model ]
+
+        ShowPopup popupType ->
+            M.createPopup (Debug.log "PT" popupType) model ! []
+
+        NewGame ->
+            init 0 model.best (\m -> { m | layout = model.layout }) []
+
+        Continue ->
+            { model | freePlay = True, popup = Nothing }
+                ! [ M.addRandomTileCmd model ]
+
+        Tick time ->
+            let
+                nextModel =
+                    M.clearScoreUpdate { model | time = time }
+            in
+                if M.isAnimating nextModel then
+                    nextModel ! []
+                else
+                    update model.nextMsg nextModel
+
+        NoOp ->
+            model ! []
 
 
 
@@ -154,13 +145,13 @@ beforeFail =
     ]
 
 
-init : Int -> Int -> M.Size -> List TileData -> ( Model, Cmd Msg )
-init score best size initialBoard =
+init : Int -> Int -> (Model -> Model) -> List TileData -> ( Model, Cmd Msg )
+init score best resizeFn initialBoard =
     let
         model =
-            M.init score best size initialBoard
+            M.init score best |> resizeFn
     in
-        model ! [ M.initCmd model ]
+        model ! [ M.initCmd model initialBoard ]
 
 
 type alias Flags =
@@ -176,7 +167,7 @@ main =
     Html.programWithFlags
         { init =
             (\{ score, best, size, initialBoard } ->
-                init score best size initialBoard
+                init score best (M.resize size) initialBoard
             )
         , subscriptions = subscriptions
         , update = update
