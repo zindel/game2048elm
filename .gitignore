@@ -5,3 +5,4 @@ elm-stuff
 tags
 build
 gh-pages
+npm-debug.log.*
