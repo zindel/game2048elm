@@ -61,9 +61,9 @@ type alias TileData =
 
 
 type alias Tile =
-    { row : Animation
-    , col : Animation
-    , size : Animation
+    { row : Int
+    , col : Int
+    , size : Float
     , value : Int
     }
 
@@ -144,9 +144,9 @@ addTile model { row, col, value } =
     let
         tile =
             Tile
-                (toFloat row |> static)
-                (toFloat col |> static)
-                (sizeAnimation model.layout.cellWidth model.time)
+                row
+                col
+                model.layout.cellWidth
                 value
 
         nextModel =
@@ -218,25 +218,15 @@ scoreAnimation time =
 
 resizeTile : Float -> Time -> Tile -> Tile
 resizeTile cellWidth time tile =
-    { tile | size = sizeAnimation cellWidth time }
+    tile
 
 
 moveTile : Time -> Int -> Int -> Tile -> Tile
 moveTile time row col tile =
-    let
-        move start end =
-            if start == end then
-                static start
-            else
-                animation time
-                    |> from start
-                    |> to end
-                    |> duration (0.12 * second)
-    in
-        { tile
-            | row = move (getTo tile.row) (toFloat row)
-            , col = move (getTo tile.col) (toFloat col)
-        }
+    { tile
+        | row = row
+        , col = col
+    }
 
 
 newPositions : Int -> (Int -> Int) -> List ( Int, Int ) -> List Int
@@ -276,13 +266,13 @@ move direction model =
 
         ( same, get, set ) =
             if changing == "col" then
-                ( .row >> getTo >> floor
-                , .col >> getTo >> floor
+                ( .row
+                , .col
                 , \t v -> moveTile model.time (same t) v t
                 )
             else
-                ( .col >> getTo >> floor
-                , .row >> getTo >> floor
+                ( .col
+                , .row
                 , \t v -> moveTile model.time v (same t) t
                 )
 
@@ -333,7 +323,7 @@ findTiles : ( Int, Int ) -> Board -> List Tile
 findTiles ( row, col ) =
     List.filter
         (\t ->
-            (getTo t.row) == (toFloat row) && (getTo t.col) == (toFloat col)
+            t.row == row && t.col == col
         )
 
 
@@ -346,7 +336,7 @@ canMoveTo : Direction -> Model -> Bool
 canMoveTo direction model =
     let
         positions =
-            List.map (\{ row, col, value } -> ( getTo row, getTo col, value ))
+            List.map (\{ row, col, value } -> ( row, col, value ))
                 >> List.sort
 
         movedModel =
@@ -524,15 +514,7 @@ isAnimating : Model -> Bool
 isAnimating { popup, time, board } =
     let
         isBoardAnimationRunning_ tiles =
-            case tiles of
-                [] ->
-                    False
-
-                tile :: tail ->
-                    not (isDone time tile.row)
-                        || not (isDone time tile.col)
-                        || not (isDone time tile.size)
-                        || isBoardAnimationRunning_ tail
+            False
     in
         popup == Nothing && isBoardAnimationRunning_ board
 
@@ -552,7 +534,7 @@ saveData { score, best, board } =
     , best
     , List.map
         (\{ row, col, value } ->
-            TileData (getTo row |> floor) (getTo col |> floor) value
+            TileData row col value
         )
         board
     )

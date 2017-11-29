@@ -13,7 +13,7 @@ import Game2048.Model
         )
 import Html exposing (Html)
 import Html.Attributes exposing (style, src)
-import Html.Events  exposing (onClick)
+import Html.Events exposing (onClick)
 import Time exposing (Time)
 import Animation exposing (animate)
 import Color exposing (Color, rgba, rgb)
@@ -111,16 +111,13 @@ tileTextColor value =
 viewTile : Layout -> Time -> Tile -> Html Msg
 viewTile layout time tile =
     let
-        getValue =
-            animate time
-
         ( top, left ) =
             toTopLeft layout
-                (getValue tile.row)
-                (getValue tile.col)
-                (getValue tile.size)
+                (toFloat tile.row)
+                (toFloat tile.col)
+                tile.size
     in
-        viewBox left top (getValue tile.size) (tileBackgroundColor tile.value) (tileTextColor tile.value) (toString tile.value)
+        viewBox left top tile.size (tileBackgroundColor tile.value) (tileTextColor tile.value) (toString tile.value)
 
 
 viewPopup : Time -> Layout -> Popup -> Html Msg
@@ -363,7 +360,7 @@ button cellWidth styles text msg =
                  ]
                     ++ styles
                 )
-            , onClick msg    
+            , onClick msg
             ]
             [ Html.text text ]
 
@@ -399,8 +396,8 @@ view model =
     Html.div
         [ style
             [ ( "position", "relative" )
-            -- , ( "left", toString model.layout.left ++ "px" )
-            -- , ( "top", "0px" )
+              -- , ( "left", toString model.layout.left ++ "px" )
+              -- , ( "top", "0px" )
             , ( "paddingTop", "20px" )
             , ( "marginLeft", toString model.layout.padding ++ "px" )
             , ( "width", toString model.layout.width ++ "px" )
